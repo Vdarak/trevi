@@ -4,10 +4,10 @@ import React, { useState, useCallback } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
+import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   createNewChatRequest,
-  createFollowUpRequest,
   getGraph,
   buildGraphNodesFromResponse,
   type CompleteEvent,
@@ -25,18 +25,18 @@ export default function Home() {
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("");
 
-  // Handle sending a message (new chat or follow-up)
+  // Handle sending a message from the landing page (always creates a new chat)
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
+    setIsCreatingChat(true);
     setStatusMessage("Connecting...");
 
     try {
-      // Build the appropriate request
-      const request = currentChatId && currentNodeId
-        ? createFollowUpRequest(currentChatId, currentNodeId, message)
-        : createNewChatRequest(message);
+      // Landing page always creates a new chat
+      const request = createNewChatRequest(message);
 
       // Send message with SSE streaming
       await sendMessage(
@@ -66,20 +66,23 @@ export default function Home() {
           
           setStatusMessage("");
           setIsLoading(false);
+          setIsCreatingChat(false);
         },
         // onError callback
         (error) => {
           console.error("Message error:", error);
           setStatusMessage(`Error: ${error.error}`);
           setIsLoading(false);
+          setIsCreatingChat(false);
         }
       );
     } catch (error) {
       console.error("Failed to send message:", error);
       setStatusMessage("Failed to send message");
       setIsLoading(false);
+      setIsCreatingChat(false);
     }
-  }, [currentChatId, currentNodeId, rootNodeId]);
+  }, [rootNodeId]);
 
   // Handle selecting a chat from sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
@@ -117,6 +120,8 @@ export default function Home() {
     setResponses([]);
     setGraphNodes([]);
     setStatusMessage("");
+    setIsLoading(false);
+    setIsCreatingChat(false);
   }, []);
 
   // Handle starting a new chat
@@ -129,8 +134,10 @@ export default function Home() {
     setCurrentNodeId(nodeId);
   }, []);
 
-  // Determine what to show: landing (chat input) or graph view
-  const showLandingPage = !currentChatId || graphNodes.length === 0;
+  // Determine what to show: landing, loading, or graph view
+  const showLandingPage = !currentChatId && !isCreatingChat;
+  const showLoadingPage = isCreatingChat;
+  const showGraphPage = currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
@@ -143,17 +150,19 @@ export default function Home() {
       
       <main className="flex-1 flex flex-col h-full relative">
         <div className="flex-1 h-full overflow-hidden">
-          {showLandingPage ? (
-            <ChatInterface 
-              onSendMessage={handleSendMessage}
-              isLoading={isLoading}
-              statusMessage={statusMessage}
-            />
-          ) : (
+          {showLoadingPage ? (
+            <GraphLoading />
+          ) : showGraphPage ? (
             <KnowledgeGraph 
               nodes={graphNodes}
               rootNodeId={rootNodeId || undefined}
               onNodeClick={handleNodeClick}
+            />
+          ) : (
+            <ChatInterface 
+              onSendMessage={handleSendMessage}
+              isLoading={isLoading}
+              statusMessage={statusMessage}
             />
           )}
         </div>
