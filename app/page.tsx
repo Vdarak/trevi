@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
@@ -8,6 +8,7 @@ import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   createNewChatRequest,
+  createDirectedQueryRequest,
   getGraph,
   buildGraphNodesFromResponse,
   type CompleteEvent,
@@ -22,10 +23,12 @@ export default function Home() {
   // Graph state
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [responses, setResponses] = useState<CompleteEvent[]>([]);
+  const responsesRef = useRef<CompleteEvent[]>([]);
   
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
 
   // Handle sending a message from the landing page (always creates a new chat)
@@ -56,13 +59,11 @@ export default function Home() {
             setRootNodeId(event.node_id);
           }
           
-          // Add to responses and rebuild graph
-          setResponses(prev => {
-            const newResponses = [...prev, event];
-            const nodes = buildGraphFromResponses(newResponses);
-            setGraphNodes(nodes);
-            return newResponses;
-          });
+          // Add to responses and rebuild graph using ref for latest value
+          const newResponses = [...responsesRef.current, event];
+          responsesRef.current = newResponses;
+          setResponses(newResponses);
+          setGraphNodes(buildGraphFromResponses(newResponses));
           
           setStatusMessage("");
           setIsLoading(false);
@@ -118,16 +119,87 @@ export default function Home() {
     setCurrentNodeId(null);
     setRootNodeId(null);
     setResponses([]);
+    responsesRef.current = [];
     setGraphNodes([]);
     setStatusMessage("");
     setIsLoading(false);
     setIsCreatingChat(false);
+    setLoadingNodeId(null);
   }, []);
 
   // Handle starting a new chat
   const handleNewChat = useCallback(() => {
     handleLogoClick(); // Same behavior - go to landing
   }, [handleLogoClick]);
+
+  // Handle clicking a direction node to explore
+  const handleDirectionClick = useCallback(async (nodeId: string) => {
+    console.log("handleDirectionClick called with nodeId:", nodeId);
+    console.log("currentChatId:", currentChatId, "loadingNodeId:", loadingNodeId);
+    
+    if (!currentChatId || loadingNodeId) {
+      console.log("Early return - missing chatId or already loading");
+      return;
+    }
+    
+    console.log("Setting loadingNodeId to:", nodeId);
+    setLoadingNodeId(nodeId);
+    
+    try {
+      const request = createDirectedQueryRequest(currentChatId, nodeId);
+      console.log("Sending request:", request);
+      
+      await sendMessage(
+        request,
+        // onUpdate callback
+        (update) => {
+          console.log("SSE Update received:", update);
+          setStatusMessage(update.message);
+        },
+        // onComplete callback - NOT async, use .then() chain instead
+        (event) => {
+          console.log("Direction query complete:", event);
+          
+          // Update current node
+          setCurrentNodeId(event.node_id);
+          
+          // Use chat_id from event (more reliable than closure)
+          const chatId = event.chat_id;
+          
+          // Re-fetch the complete graph from API to ensure we have all nodes
+          getGraph(chatId)
+            .then((graphResponse) => {
+              console.log("Graph fetched successfully:", graphResponse);
+              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              setGraphNodes(nodes);
+            })
+            .catch((fetchError) => {
+              console.error("Failed to refresh graph:", fetchError);
+              // Fallback: add to responses and rebuild (works if we have response history)
+              const newResponses = [...responsesRef.current, event];
+              responsesRef.current = newResponses;
+              setResponses(newResponses);
+              setGraphNodes(buildGraphFromResponses(newResponses));
+            })
+            .finally(() => {
+              console.log("Clearing loading state");
+              setStatusMessage("");
+              setLoadingNodeId(null);
+            });
+        },
+        // onError callback
+        (error) => {
+          console.error("Direction query error:", error);
+          setStatusMessage(`Error: ${error.error}`);
+          setLoadingNodeId(null);
+        }
+      );
+    } catch (error) {
+      console.error("Failed to explore direction:", error);
+      setStatusMessage("Failed to explore direction");
+      setLoadingNodeId(null);
+    }
+  }, [currentChatId, loadingNodeId]);
 
   // Handle clicking a node in the graph
   const handleNodeClick = useCallback((nodeId: string) => {
@@ -157,6 +229,8 @@ export default function Home() {
               nodes={graphNodes}
               rootNodeId={rootNodeId || undefined}
               onNodeClick={handleNodeClick}
+              onDirectionClick={handleDirectionClick}
+              loadingNodeId={loadingNodeId}
             />
           ) : (
             <ChatInterface 

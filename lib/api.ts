@@ -187,11 +187,11 @@ export async function getGraph(chatId: string): Promise<GraphResponse> {
  * Converts GraphResponse into GraphNode array for the KnowledgeGraph component.
  */
 export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
-  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null }>;
+  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean }>;
   currentNodeId: string;
   rootNodeId: string | null;
 } {
-  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null }> = [];
+  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean }> = [];
   let rootNodeId: string | null = null;
 
   // Build a map of node ID to parent ID from edges
@@ -214,6 +214,7 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
       label: nodeData.node_label,
       summary: nodeData.display_summary,
       parentId: parentId === "root" ? null : parentId,
+      isDirection: nodeData.type === "direction",
     });
 
     // Find root node (parent is "root" or no parent)
@@ -347,39 +348,80 @@ export async function sendMessage(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  const processEvent = (eventType: string, data: string) => {
+    try {
+      const parsed = JSON.parse(data);
+      console.log(`SSE Event [${eventType}]:`, parsed);
+      
+      switch (eventType) {
+        case "update":
+          onUpdate?.(parsed as UpdateEvent);
+          break;
+        case "complete":
+          onComplete?.(parsed as CompleteEvent);
+          break;
+        case "error":
+          onError?.(parsed as ErrorEvent);
+          break;
+        default:
+          console.log(`Unknown SSE event type: ${eventType}`);
+      }
+    } catch (e) {
+      console.error("Failed to parse SSE data:", e, "Raw data:", data);
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      console.log("SSE stream ended. Remaining buffer:", buffer);
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+    
+    // Process complete SSE messages (separated by double newlines)
+    const messages = buffer.split("\n\n");
+    buffer = messages.pop() || ""; // Keep incomplete message in buffer
 
-    let currentEvent = "";
-
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ") && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          
-          switch (currentEvent) {
-            case "update":
-              onUpdate?.(data as UpdateEvent);
-              break;
-            case "complete":
-              onComplete?.(data as CompleteEvent);
-              break;
-            case "error":
-              onError?.(data as ErrorEvent);
-              break;
-          }
-        } catch (e) {
-          console.error("Failed to parse SSE data:", e);
+    for (const message of messages) {
+      if (!message.trim()) continue;
+      
+      let eventType = "";
+      let eventData = "";
+      
+      const lines = message.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("event:")) {
+          eventType = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          eventData = line.slice(5).trim();
         }
-        currentEvent = "";
       }
+      
+      if (eventType && eventData) {
+        processEvent(eventType, eventData);
+      }
+    }
+  }
+  
+  // Process any remaining data in buffer after stream ends
+  if (buffer.trim()) {
+    console.log("Processing remaining buffer after stream end:", buffer);
+    let eventType = "";
+    let eventData = "";
+    
+    const lines = buffer.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventType = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        eventData = line.slice(5).trim();
+      }
+    }
+    
+    if (eventType && eventData) {
+      processEvent(eventType, eventData);
     }
   }
 }

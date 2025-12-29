@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -8,15 +8,17 @@ import {
   Background,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
   Node,
   Edge,
   Position,
   Handle,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import dagre from 'dagre';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, LayoutGrid, Network, ArrowDown, ArrowRight } from 'lucide-react';
 import { CompleteEvent } from '@/lib/api';
+import { hierarchy, tree } from 'd3-hierarchy';
 
 // ============================================================================
 // Types
@@ -27,64 +29,278 @@ export interface GraphNode {
   label: string;
   summary?: string;
   parentId: string | null;
+  isDirection?: boolean; // True if this is a direction node (clickable to explore)
 }
 
 export interface KnowledgeGraphProps {
   nodes: GraphNode[];
   rootNodeId?: string;
   onNodeClick?: (nodeId: string) => void;
+  onDirectionClick?: (nodeId: string) => void; // Callback for clicking direction nodes
+  loadingNodeId?: string | null; // Node ID currently being loaded
 }
 
 // ============================================================================
 // Layout Configuration
 // ============================================================================
 
-const NODE_WIDTH = 200;
 const NODE_HEIGHT = 50;
-const NODE_SEP = 80;  // Horizontal spacing between siblings
-const RANK_SEP = 100; // Vertical spacing between levels
+const SIBLING_SEP = 60;  // Tight spacing between leaf siblings
+const SUBTREE_SEP = 140; // Larger spacing between different subtrees
+const RANK_SEP = 120; // Vertical spacing between levels
+
+// Helper to estimate node width based on label length
+function getNodeWidth(label: string): number {
+  // Base width (padding + icon space) + approx char width (10px)
+  // Min width 200px to maintain consistency for short labels
+  return Math.max(200, (label?.length || 0) * 10 + 80);
+}
 
 /**
- * Auto-layouts nodes using dagre algorithm.
- * Ensures nodes at same depth are aligned and centered over children.
+ * Custom tree layout algorithm that ensures each subtree stays within its own 
+ * horizontal space, preventing children from invading sibling node territories.
+ * 
+ * This creates a proper hierarchical tree where:
+ * - Each node's descendants stay in a dedicated vertical column
+ * - Sister nodes never have overlapping subtrees
+ * - Parent nodes are centered over their children
  */
-function getLayoutedElements(
+function getTreeLayout(
   nodes: Node[],
   edges: Edge[],
-  direction: "TB" | "LR" = "TB"
+  direction: 'TB' | 'LR' = 'TB'
 ): { nodes: Node[]; edges: Edge[] } {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: direction,
-    nodesep: NODE_SEP,
-    ranksep: RANK_SEP,
-    marginx: 50,
-    marginy: 50,
-  });
+  if (nodes.length === 0) return { nodes: [], edges: [] };
 
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  });
+  const isLR = direction === 'LR';
 
+  // Build parent-child relationships
+  const childrenMap = new Map<string, string[]>();
+  const parentMap = new Map<string, string>();
+  
   edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    parentMap.set(edge.target, edge.source);
+    const children = childrenMap.get(edge.source) || [];
+    children.push(edge.target);
+    childrenMap.set(edge.source, children);
   });
 
-  dagre.layout(dagreGraph);
+  // Find root node (no parent)
+  const rootId = nodes.find((n) => !parentMap.has(n.id))?.id;
+  if (!rootId) return { nodes, edges };
 
-  const isHorizontal = direction === "LR";
+  // Calculate the breadth (width in TB, height in LR) each subtree needs
+  const subtreeBreadths = new Map<string, number>();
+  
+  function calculateSubtreeBreadth(nodeId: string): number {
+    const children = childrenMap.get(nodeId) || [];
+    const node = nodes.find(n => n.id === nodeId);
+    
+    // In TB, breadth is width. In LR, breadth is height.
+    const nodeBreadth = isLR ? NODE_HEIGHT : (node ? getNodeWidth(node.data.label as string) : 180);
+    
+    if (children.length === 0) {
+      subtreeBreadths.set(nodeId, nodeBreadth);
+      return nodeBreadth;
+    }
+    
+    let totalBreadth = 0;
+    children.forEach((childId, index) => {
+      totalBreadth += calculateSubtreeBreadth(childId);
+      if (index < children.length - 1) {
+        const isLeaf = (childrenMap.get(childId) || []).length === 0;
+        const nextChildId = children[index + 1];
+        const nextIsLeaf = (childrenMap.get(nextChildId) || []).length === 0;
+        
+        const spacing = (isLeaf && nextIsLeaf) ? SIBLING_SEP : SUBTREE_SEP;
+        totalBreadth += spacing;
+      }
+    });
+    
+    const breadth = Math.max(totalBreadth, nodeBreadth);
+    subtreeBreadths.set(nodeId, breadth);
+    return breadth;
+  }
+  
+  calculateSubtreeBreadth(rootId);
+
+  // Position nodes
+  const positions = new Map<string, { x: number; y: number }>();
+  
+  function positionNode(nodeId: string, x: number, y: number) {
+    const subtreeBreadth = subtreeBreadths.get(nodeId) || 180;
+    const node = nodes.find(n => n.id === nodeId);
+    const nodeBreadth = isLR ? NODE_HEIGHT : (node ? getNodeWidth(node.data.label as string) : 180);
+    const nodeDepth = isLR ? (node ? getNodeWidth(node.data.label as string) : 180) : NODE_HEIGHT;
+    
+    // Center this node in its allocated subtree space (breadth-wise)
+    // In TB: x is breadth, y is depth
+    // In LR: y is breadth, x is depth
+    
+    if (isLR) {
+      // LR: x is depth, y is breadth
+      const nodeY = y + (subtreeBreadth - nodeBreadth) / 2;
+      positions.set(nodeId, { x, y: nodeY });
+    } else {
+      // TB: x is breadth, y is depth
+      const nodeX = x + (subtreeBreadth - nodeBreadth) / 2;
+      positions.set(nodeId, { x: nodeX, y });
+    }
+    
+    const children = childrenMap.get(nodeId) || [];
+    if (children.length === 0) return;
+    
+    // Position children
+    // Start from "left" (top in LR) of this node's subtree space
+    let currentBreadth = isLR ? y : x; 
+    
+    // Depth increases by node depth + rank sep
+    const nextDepth = (isLR ? x : y) + nodeDepth + RANK_SEP;
+    
+    children.forEach((childId, index) => {
+      const childSubtreeBreadth = subtreeBreadths.get(childId) || 180;
+      
+      if (isLR) {
+        positionNode(childId, nextDepth, currentBreadth);
+      } else {
+        positionNode(childId, currentBreadth, nextDepth);
+      }
+      
+      if (index < children.length - 1) {
+        const isLeaf = (childrenMap.get(childId) || []).length === 0;
+        const nextChildId = children[index + 1];
+        const nextIsLeaf = (childrenMap.get(nextChildId) || []).length === 0;
+        
+        const spacing = (isLeaf && nextIsLeaf) ? SIBLING_SEP : SUBTREE_SEP;
+        currentBreadth += childSubtreeBreadth + spacing;
+      }
+    });
+  }
+  
+  const totalBreadth = subtreeBreadths.get(rootId) || 180;
+  // Start centered
+  if (isLR) {
+    positionNode(rootId, 0, -totalBreadth / 2);
+  } else {
+    positionNode(rootId, -totalBreadth / 2, 0);
+  }
+
+  // Apply positions to nodes
   const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
+    const pos = positions.get(node.id) || { x: 0, y: 0 };
     return {
       ...node,
-      targetPosition: isHorizontal ? Position.Left : Position.Top,
-      sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
-      position: {
-        x: nodeWithPosition.x - NODE_WIDTH / 2,
-        y: nodeWithPosition.y - NODE_HEIGHT / 2,
-      },
+      targetPosition: isLR ? Position.Left : Position.Top,
+      sourcePosition: isLR ? Position.Right : Position.Bottom,
+      position: pos,
     };
+  });
+
+  return { nodes: layoutedNodes, edges };
+}
+
+/**
+ * Tidy tree layout using d3-hierarchy's Reingold-Tilford algorithm.
+ * This produces a more compact and balanced tree structure.
+ */
+function getTidyTreeLayout(
+  nodes: Node[],
+  edges: Edge[],
+  direction: 'TB' | 'LR' = 'TB'
+): { nodes: Node[]; edges: Edge[] } {
+  if (nodes.length === 0) return { nodes: [], edges: [] };
+
+  const isLR = direction === 'LR';
+
+  // Build parent-child relationships to find root and build hierarchy
+  const childMap = new Map<string, string[]>();
+  const parentMap = new Map<string, string>();
+  
+  edges.forEach((edge) => {
+    parentMap.set(edge.target, edge.source);
+    const children = childMap.get(edge.source) || [];
+    children.push(edge.target);
+    childMap.set(edge.source, children);
+  });
+
+  // Find root node
+  const rootId = nodes.find((n) => !parentMap.has(n.id))?.id;
+  if (!rootId) return { nodes, edges };
+
+  const rootNode = nodes.find(n => n.id === rootId);
+  if (!rootNode) return { nodes, edges };
+
+  // Create D3 hierarchy
+  const d3Root = hierarchy(rootNode, (d) => {
+    const childrenIds = childMap.get(d.id);
+    return childrenIds?.map(id => nodes.find(n => n.id === id)!) || null;
+  });
+
+  // Configure tree layout
+  const treeLayout = tree<Node>();
+
+  if (isLR) {
+    // LR Layout
+    // nodeSize([height, width]) - height is vertical spacing (breadth), width is horizontal (depth)
+    // But D3 tree uses x for breadth and y for depth usually.
+    // We will map d3.x -> screen.y (breadth) and d3.y -> screen.x (depth)
+    
+    // Calculate max width per depth level to ensure alignment
+    const depthWidths = new Map<number, number>();
+    d3Root.each((node) => {
+      const width = getNodeWidth(node.data.data.label as string);
+      const currentMax = depthWidths.get(node.depth) || 0;
+      depthWidths.set(node.depth, Math.max(currentMax, width));
+    });
+
+    treeLayout
+      .nodeSize([NODE_HEIGHT, 1]) // 1 is dummy depth, we'll fix it manually
+      .separation((a, b) => {
+        // Vertical separation
+        return (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP) / NODE_HEIGHT + 1;
+      });
+      
+    treeLayout(d3Root);
+    
+    // Fix X coordinates (depth) based on max widths
+    d3Root.each((node) => {
+      let x = 0;
+      for (let i = 0; i < node.depth; i++) {
+        x += (depthWidths.get(i) || 180) + RANK_SEP;
+      }
+      // d3.y is depth, but we overwrite it
+      node.y = x;
+    });
+
+  } else {
+    // TB Layout
+    treeLayout
+      .nodeSize([1, NODE_HEIGHT + RANK_SEP])
+      .separation((a, b) => {
+        const widthA = getNodeWidth(a.data.data.label as string);
+        const widthB = getNodeWidth(b.data.data.label as string);
+        const distance = (widthA + widthB) / 2 + (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP);
+        return distance;
+      });
+      
+    treeLayout(d3Root);
+  }
+
+  // Map positions back to nodes
+  const layoutedNodes = nodes.map((node) => {
+    const d3Node = d3Root.descendants().find((d) => d.data.id === node.id);
+    
+    if (d3Node) {
+      return {
+        ...node,
+        targetPosition: isLR ? Position.Left : Position.Top,
+        sourcePosition: isLR ? Position.Right : Position.Bottom,
+        position: isLR 
+          ? { x: d3Node.y, y: d3Node.x } // Swap for LR: d3.y is depth(x), d3.x is breadth(y)
+          : { x: d3Node.x, y: d3Node.y },
+      };
+    }
+    return node;
   });
 
   return { nodes: layoutedNodes, edges };
@@ -156,51 +372,98 @@ interface ConceptNodeData {
   isRoot?: boolean;
   isCollapsed?: boolean;
   hasChildren?: boolean;
+  childCount?: number; // Number of children for collapsed indicator
+  isDirection?: boolean;
+  isLoading?: boolean;
   onToggleCollapse?: () => void;
+  onDirectionClick?: () => void;
   [key: string]: unknown;
 }
 
-function ConceptNode({ data }: { data: ConceptNodeData }) {
+function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNodeData, targetPosition?: Position, sourcePosition?: Position }) {
+  const isClickableDirection = data.isDirection && !data.hasChildren;
+  const showCollapsedDots = data.isCollapsed && data.hasChildren && (data.childCount ?? 0) > 0;
+  
   return (
-    <div
-      className={`
-        px-3 py-2 rounded-lg border-2 shadow-sm transition-all duration-200 flex items-center justify-center gap-2
-        ${data.isRoot 
-          ? "bg-slate-900 text-white border-slate-900" 
-          : data.isHighlighted
-            ? "bg-blue-50 border-blue-400 shadow-md"
-            : "bg-white border-slate-200 hover:border-slate-300"
-        }
-      `}
-      style={{ minWidth: NODE_WIDTH - 20, maxWidth: NODE_WIDTH }}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-slate-400" />
-      
-      {/* Collapse/Expand button */}
-      {data.hasChildren && (
-        <button
-          onClick={(e) => {
+    <div className="flex flex-col items-center">
+      <div
+        className={`
+          relative px-4 py-2 rounded-lg border-2 shadow-sm transition-all duration-200 flex items-center justify-center gap-2 whitespace-nowrap
+          ${data.isRoot 
+            ? "bg-slate-900 text-white border-slate-900" 
+            : data.isLoading
+              ? "bg-blue-50 border-blue-300"
+              : isClickableDirection
+                ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:border-blue-400 cursor-pointer hover:shadow-md"
+                : data.isHighlighted
+                  ? "bg-blue-50 border-blue-400 shadow-md"
+                  : "bg-white border-slate-200 hover:border-slate-300"
+          }
+        `}
+        onClick={(e) => {
+          if (isClickableDirection && data.onDirectionClick && !data.isLoading) {
             e.stopPropagation();
-            data.onToggleCollapse?.();
-          }}
-          className={`
-            flex-shrink-0 w-5 h-5 rounded flex items-center justify-center
-            ${data.isRoot ? "hover:bg-slate-700" : "hover:bg-slate-100"}
-          `}
-        >
-          {data.isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
-        </button>
-      )}
-      
-      <div className={`font-medium text-sm truncate text-center ${data.isRoot ? "text-white" : "text-slate-800"}`}>
-        {data.label}
+            data.onDirectionClick();
+          }
+        }}
+      >
+        <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />
+        
+        {/* Collapse/Expand button */}
+        {data.hasChildren && !data.isLoading && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onToggleCollapse?.();
+            }}
+            className={`
+              relative z-10 flex-shrink-0 w-5 h-5 rounded flex items-center justify-center
+              ${data.isRoot ? "hover:bg-slate-700 text-white" : "hover:bg-slate-100 text-slate-700"}
+            `}
+          >
+            {data.isCollapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+        )}
+        
+        {/* Loading spinner */}
+        {data.isLoading && (
+          <div className="flex-shrink-0 w-4 h-4">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        
+        <div className={`font-medium text-sm text-center ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : "text-slate-800"}`}>
+          {data.label}
+        </div>
+        
+        {/* Direction indicator */}
+        {isClickableDirection && !data.isLoading && (
+          <div className="flex-shrink-0 w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center">
+            <ChevronRight className="w-3 h-3 text-blue-600" />
+          </div>
+        )}
+        
+        <Handle type="source" position={sourcePosition || Position.Bottom} className="!bg-slate-400" />
       </div>
       
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-400" />
+      {/* Collapsed children indicator dots */}
+      {showCollapsedDots && (
+        <div className="flex items-center gap-1 mt-2 px-2 py-1 bg-slate-100 rounded-full">
+          {Array.from({ length: Math.min(data.childCount ?? 0, 5) }).map((_, i) => (
+            <div
+              key={i}
+              className="w-2 h-2 rounded-full bg-slate-400"
+            />
+          ))}
+          {(data.childCount ?? 0) > 5 && (
+            <span className="text-xs text-slate-500 ml-0.5">+{(data.childCount ?? 0) - 5}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -235,10 +498,17 @@ function Tooltip({ content, position }: TooltipProps) {
 // Main Component
 // ============================================================================
 
-export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: KnowledgeGraphProps) {
+// Inner component that has access to useReactFlow
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeId }: KnowledgeGraphProps) {
+  const { fitView } = useReactFlow();
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+  const [layoutMode, setLayoutMode] = useState<'custom' | 'tidy'>('custom');
+  const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
+  
+  // Track if we've done the initial fitView
+  const hasInitialFitRef = useRef(false);
 
   // Get the summary of hovered node
   const hoveredSummary = useMemo(() => {
@@ -299,7 +569,10 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
         label: node.label,
         isRoot: node.id === root,
         hasChildren: (childMap.get(node.id)?.length || 0) > 0,
+        childCount: childMap.get(node.id)?.length || 0,
         isCollapsed: collapsedNodes.has(node.id),
+        isDirection: node.isDirection,
+        isLoading: node.id === loadingNodeId,
       },
     }));
 
@@ -309,16 +582,18 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
         id: `e-${node.parentId}-${node.id}`,
         source: node.parentId!,
         target: node.id,
-        type: "smoothstep",
+        type: "default",
         style: { stroke: "#94a3b8", strokeWidth: 2 },
       }));
 
-    const layouted = getLayoutedElements(rfNodes, rfEdges, "TB");
+    const layouted = layoutMode === 'tidy'
+      ? getTidyTreeLayout(rfNodes, rfEdges, direction)
+      : getTreeLayout(rfNodes, rfEdges, direction);
     return { layoutedNodes: layouted.nodes, layoutedEdges: layouted.edges, rootId: root };
-  }, [graphNodes, rootNodeId, hiddenNodes, childMap, collapsedNodes]);
+  }, [graphNodes, rootNodeId, hiddenNodes, childMap, collapsedNodes, loadingNodeId, layoutMode, direction]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Toggle collapse state for a node
   const toggleCollapse = useCallback((nodeId: string) => {
@@ -333,19 +608,33 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
     });
   }, []);
 
-  // Re-sync when layoutedNodes change
+  // Re-sync when layoutedNodes change - completely replace the nodes/edges arrays
   useEffect(() => {
-    // Add collapse toggle handler to node data
-    const nodesWithHandlers = layoutedNodes.map((node) => ({
+    // Add collapse toggle handler and direction click handler to node data
+    const nodesWithHandlers: Node[] = layoutedNodes.map((node) => ({
       ...node,
+      // Ensure position is explicitly set
+      position: { ...node.position },
       data: {
         ...node.data,
         onToggleCollapse: () => toggleCollapse(node.id),
+        onDirectionClick: () => onDirectionClick?.(node.id),
       },
     }));
-    setNodes(nodesWithHandlers);
-    setEdges(layoutedEdges);
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, toggleCollapse]);
+    
+    // Use functional update to completely replace, not merge
+    setNodes(() => nodesWithHandlers);
+    setEdges(() => [...layoutedEdges]);
+    
+    // Only do fitView on initial load (when graph first appears)
+    if (!hasInitialFitRef.current && nodesWithHandlers.length > 0) {
+      hasInitialFitRef.current = true;
+      // Use setTimeout to ensure React Flow has processed the new nodes
+      setTimeout(() => {
+        fitView({ padding: 0.3, duration: 300 });
+      }, 50);
+    }
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, toggleCollapse, onDirectionClick, fitView]);
 
   // Update nodes/edges when hovering to show path to root
   const handleNodeMouseEnter = useCallback(
@@ -363,12 +652,12 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
         }))
       );
 
-      // Update edge styling - dotted line for path to root with higher z-index
+      // Update edge styling - highlight path to root
       setEdges((eds) =>
         eds.map((e) => ({
           ...e,
           style: edgeIds.has(e.id)
-            ? { stroke: "#3b82f6", strokeWidth: 3, strokeDasharray: "5,5" }
+            ? { stroke: "#3b82f6", strokeWidth: 3 }
             : { stroke: "#e2e8f0", strokeWidth: 2 },
           animated: edgeIds.has(e.id),
           zIndex: edgeIds.has(e.id) ? 1000 : 0,
@@ -424,6 +713,45 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
 
   return (
     <div className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
+      {/* Layout Controls */}
+      <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+        {/* Layout Mode Toggle */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex gap-1">
+          <button
+            onClick={() => setLayoutMode('custom')}
+            className={`p-2 rounded ${layoutMode === 'custom' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+            title="Custom Layout"
+          >
+            <LayoutGrid className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setLayoutMode('tidy')}
+            className={`p-2 rounded ${layoutMode === 'tidy' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+            title="Tidy Tree Layout"
+          >
+            <Network className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Direction Toggle */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex gap-1">
+          <button
+            onClick={() => setDirection('TB')}
+            className={`p-2 rounded ${direction === 'TB' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+            title="Top to Bottom"
+          >
+            <ArrowDown className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setDirection('LR')}
+            className={`p-2 rounded ${direction === 'LR' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+            title="Left to Right"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -436,7 +764,6 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={true}
-        fitView
         fitViewOptions={{ padding: 0.3 }}
         proOptions={{ hideAttribution: true }}
         minZoom={0.3}
@@ -461,35 +788,64 @@ export function KnowledgeGraph({ nodes: graphNodes, rootNodeId, onNodeClick }: K
   );
 }
 
+// Wrapper component that provides ReactFlowProvider
+export function KnowledgeGraph(props: KnowledgeGraphProps) {
+  return (
+    <ReactFlowProvider>
+      <KnowledgeGraphInner {...props} />
+    </ReactFlowProvider>
+  );
+}
+
 // ============================================================================
 // Utility: Convert API response to GraphNode[]
 // ============================================================================
 
 /**
  * Converts CompleteEvent responses into GraphNode array for the graph.
+ * Direction nodes are marked with isDirection: true so they can be clicked to explore.
+ * Uses a Map to prevent duplicate nodes.
  */
 export function buildGraphFromResponses(responses: CompleteEvent[]): GraphNode[] {
-  const nodes: GraphNode[] = [];
+  // Use a Map to ensure unique nodes by ID
+  const nodeMap = new Map<string, GraphNode>();
+  
+  // Track direction node IDs that have been clicked (have a response as child)
+  const exploredDirections = new Set<string>();
+  responses.forEach((response) => {
+    // If this response's parent is not "root", it means a direction was clicked
+    if (response.parent_node_id && response.parent_node_id !== "root") {
+      exploredDirections.add(response.parent_node_id);
+    }
+  });
 
   responses.forEach((response) => {
-    // Add main response node
-    nodes.push({
+    // Add main response node (conversation nodes are not clickable directions)
+    nodeMap.set(response.node_id, {
       id: response.node_id,
       label: response.label,
       summary: response.summary,
       parentId: response.parent_node_id === "root" ? null : response.parent_node_id,
+      isDirection: false,
     });
 
     // Add direction nodes as children
     response.direction_nodes.forEach((dir) => {
-      nodes.push({
-        id: dir.node_id,
-        label: dir.label,
-        summary: dir.summary,
-        parentId: response.node_id,
-      });
+      // Check if this direction has been explored (clicked)
+      const hasBeenExplored = exploredDirections.has(dir.node_id);
+      
+      // Only add if not already in the map (conversation nodes take precedence)
+      if (!nodeMap.has(dir.node_id)) {
+        nodeMap.set(dir.node_id, {
+          id: dir.node_id,
+          label: dir.label,
+          summary: dir.summary,
+          parentId: response.node_id,
+          isDirection: !hasBeenExplored, // Not clickable if already explored
+        });
+      }
     });
   });
 
-  return nodes;
+  return Array.from(nodeMap.values());
 }

@@ -62,14 +62,6 @@ export function Sidebar({
         <p className="text-sm text-slate-500 mb-4">
           explore your <span className="text-blue-500 font-semibold">curiosity.</span>
         </p>
-        <Button 
-          variant="outline" 
-          className="w-full justify-start gap-2"
-          onClick={onNewChat}
-        >
-          <Plus className="w-4 h-4" />
-          New Chat
-        </Button>
       </div>
 
       <div className="space-y-4 py-4 flex-1 overflow-y-auto">
