@@ -375,6 +375,7 @@ interface ConceptNodeData {
   childCount?: number; // Number of children for collapsed indicator
   isDirection?: boolean;
   isLoading?: boolean;
+  parentId?: string | null; // Added for animation logic
   onToggleCollapse?: () => void;
   onDirectionClick?: () => void;
   [key: string]: unknown;
@@ -495,6 +496,205 @@ function Tooltip({ content, position }: TooltipProps) {
 }
 
 // ============================================================================
+// Animation Hook
+// ============================================================================
+
+function useLayoutAnimation(
+  targetNodes: Node[],
+  targetEdges: Edge[],
+  setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void,
+  setEdges: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void,
+  onAnimationComplete?: () => void
+) {
+  const { getNodes } = useReactFlow();
+  const animationFrameRef = useRef<number>();
+  const startTimeRef = useRef<number>();
+  const startNodesRef = useRef<Map<string, Node>>(new Map());
+  
+  // We need to track the *previous* targetNodes to know if we should animate
+  const prevTargetNodesRef = useRef<Node[]>([]);
+
+  useEffect(() => {
+    // Skip if targets haven't changed (deep comparison would be better but length/ids is a decent proxy)
+    // For now, we rely on the dependency array which includes targetNodes from useMemo
+    
+    const currentNodes = getNodes();
+    
+    // If this is the first load (no current nodes), just set them immediately without animation
+    if (currentNodes.length === 0) {
+      setNodes(targetNodes);
+      setEdges(targetEdges);
+      prevTargetNodesRef.current = targetNodes;
+      onAnimationComplete?.();
+      return;
+    }
+
+    // 1. Setup Start Positions
+    const currentNodeMap = new Map(currentNodes.map(n => [n.id, n]));
+    const startNodeMap = new Map<string, Node>();
+    const exitingNodes: Node[] = [];
+
+    // Identify exiting nodes (present in current but not in target)
+    const targetNodeIds = new Set(targetNodes.map(n => n.id));
+    currentNodes.forEach(node => {
+      if (!targetNodeIds.has(node.id)) {
+        exitingNodes.push(node);
+      }
+    });
+    
+    // For every target node, determine its start position
+    targetNodes.forEach(targetNode => {
+      if (currentNodeMap.has(targetNode.id)) {
+        // Existing node: start from current position
+        startNodeMap.set(targetNode.id, currentNodeMap.get(targetNode.id)!);
+      } else {
+        // New node: "Sprout" from parent
+        const parentId = targetNode.data.parentId as string;
+        let startPos = { x: 0, y: 0 };
+        
+        // Try to find parent in current nodes
+        if (parentId && currentNodeMap.has(parentId)) {
+          startPos = currentNodeMap.get(parentId)!.position;
+        } else if (parentId && startNodeMap.has(parentId)) {
+             // Parent is also new, use its start pos (which might be grandparent)
+             startPos = startNodeMap.get(parentId)!.position;
+        } else {
+             // Fallback: try to find a "closest" ancestor or just root
+             const root = currentNodes.find(n => n.data.isRoot);
+             if (root) startPos = root.position;
+        }
+        
+        startNodeMap.set(targetNode.id, {
+          ...targetNode,
+          position: { ...startPos },
+          style: { ...targetNode.style, opacity: 0.5 } // Start at 50% opacity
+        });
+      }
+    });
+
+    // Setup Exit Targets for exiting nodes
+    const exitNodeMap = new Map<string, { start: Node, targetPos: {x: number, y: number} }>();
+    exitingNodes.forEach(node => {
+        const parentId = node.data.parentId as string;
+        let targetPos = node.position; // Default to stay in place if parent not found
+
+        // Find parent in targetNodes to know where to shrink to
+        const parentInTarget = targetNodes.find(n => n.id === parentId);
+        if (parentInTarget) {
+            targetPos = parentInTarget.position;
+        } else {
+            // If parent is also exiting, try to find the nearest ancestor that remains
+            let curr = node;
+            while (curr.data.parentId) {
+                const pId = curr.data.parentId as string;
+                const pTarget = targetNodes.find(n => n.id === pId);
+                if (pTarget) {
+                    targetPos = pTarget.position;
+                    break;
+                }
+                // If parent not in target, try to find parent in current to continue up
+                const pCurrent = currentNodeMap.get(pId);
+                if (!pCurrent) break;
+                curr = pCurrent;
+            }
+        }
+        exitNodeMap.set(node.id, { start: node, targetPos });
+    });
+    
+    startNodesRef.current = startNodeMap;
+    
+    // 2. Start Animation Loop
+    const duration = 900; // ms
+    
+    const animate = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const progress = Math.min((timestamp - startTimeRef.current) / duration, 1);
+      
+      // Ease out cubic: 1 - (1-t)^3
+      const t = 1 - Math.pow(1 - progress, 3);
+      
+      // Animate entering/updating nodes
+      const nextTargetNodes = targetNodes.map(targetNode => {
+        const startNode = startNodesRef.current.get(targetNode.id);
+        
+        // If something went wrong and we don't have a start node, just jump to target
+        if (!startNode) return targetNode;
+        
+        const startOpacity = Number(startNode.style?.opacity ?? 1);
+        const targetOpacity = Number(targetNode.style?.opacity ?? 1);
+        
+        // Optimization: If node is already at target position and opacity, return the targetNode reference directly
+        // This prevents unnecessary re-renders for stationary nodes
+        const dx = targetNode.position.x - startNode.position.x;
+        const dy = targetNode.position.y - startNode.position.y;
+        const dOpacity = targetOpacity - startOpacity;
+        
+        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1 && Math.abs(dOpacity) < 0.01) {
+            return targetNode;
+        }
+        
+        return {
+          ...targetNode,
+          position: {
+            x: startNode.position.x + dx * t,
+            y: startNode.position.y + dy * t,
+          },
+          // Fade in opacity if it was < 1
+          style: { 
+             ...targetNode.style, 
+             opacity: startOpacity + dOpacity * t
+          }
+        };
+      });
+
+      // Animate exiting nodes
+      const nextExitingNodes = exitingNodes.map(node => {
+        const exitData = exitNodeMap.get(node.id);
+        if (!exitData) return node;
+
+        return {
+            ...node,
+            position: {
+                x: exitData.start.position.x + (exitData.targetPos.x - exitData.start.position.x) * t,
+                y: exitData.start.position.y + (exitData.targetPos.y - exitData.start.position.y) * t,
+            },
+            style: {
+                ...node.style,
+                opacity: 1 - t, // Fade out to 0
+                pointerEvents: 'none', // Disable interaction while exiting
+            }
+        };
+      });
+      
+      setNodes([...nextTargetNodes, ...nextExitingNodes]);
+      
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        startTimeRef.current = undefined;
+        // Final state: only target nodes
+        setNodes(targetNodes);
+        onAnimationComplete?.();
+      }
+    };
+    
+    // Cancel previous animation
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    startTimeRef.current = undefined;
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
+    // Update edges immediately - they will follow the nodes as they move
+    setEdges(targetEdges);
+    
+    prevTargetNodesRef.current = targetNodes;
+    
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [targetNodes, targetEdges, setNodes, setEdges, getNodes]); // Dependencies ensure this runs when layout changes
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -573,6 +773,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         isCollapsed: collapsedNodes.has(node.id),
         isDirection: node.isDirection,
         isLoading: node.id === loadingNodeId,
+        parentId: node.parentId, // Pass parentId for animation
       },
     }));
 
@@ -609,9 +810,9 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   }, []);
 
   // Re-sync when layoutedNodes change - completely replace the nodes/edges arrays
-  useEffect(() => {
-    // Add collapse toggle handler and direction click handler to node data
-    const nodesWithHandlers: Node[] = layoutedNodes.map((node) => ({
+  // We use useLayoutAnimation to handle the transition
+  const nodesWithHandlers = useMemo(() => {
+    return layoutedNodes.map((node) => ({
       ...node,
       // Ensure position is explicitly set
       position: { ...node.position },
@@ -621,20 +822,21 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         onDirectionClick: () => onDirectionClick?.(node.id),
       },
     }));
-    
-    // Use functional update to completely replace, not merge
-    setNodes(() => nodesWithHandlers);
-    setEdges(() => [...layoutedEdges]);
-    
-    // Only do fitView on initial load (when graph first appears)
-    if (!hasInitialFitRef.current && nodesWithHandlers.length > 0) {
-      hasInitialFitRef.current = true;
-      // Use setTimeout to ensure React Flow has processed the new nodes
-      setTimeout(() => {
+  }, [layoutedNodes, toggleCollapse, onDirectionClick]);
+
+  useLayoutAnimation(
+    nodesWithHandlers,
+    layoutedEdges,
+    setNodes,
+    setEdges,
+    useCallback(() => {
+      // Only do fitView on initial load (when graph first appears)
+      if (!hasInitialFitRef.current && nodesWithHandlers.length > 0) {
+        hasInitialFitRef.current = true;
         fitView({ padding: 0.3, duration: 300 });
-      }, 50);
-    }
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, toggleCollapse, onDirectionClick, fitView]);
+      }
+    }, [fitView, nodesWithHandlers.length])
+  );
 
   // Update nodes/edges when hovering to show path to root
   const handleNodeMouseEnter = useCallback(
