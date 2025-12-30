@@ -1134,8 +1134,33 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             messages: graphNode.payload,
             label: graphNode.label,
             onClose: () => {
+              // 1. Remove panel node and edge
               setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
               setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+
+              // 2. Clear hovered state
+              setHoveredNodeId(null);
+
+              // 3. Reset node highlighting
+              setNodes((nds) =>
+                nds.map((n) => ({
+                  ...n,
+                  data: { ...n.data, isHighlighted: false },
+                }))
+              );
+
+              // 4. Reset edge styling
+              setEdges((eds) =>
+                eds.map((e) => {
+                  if (e.id.startsWith('panel-edge-')) return e;
+                  return {
+                    ...e,
+                    style: { stroke: "#94a3b8", strokeWidth: 2 },
+                    animated: false,
+                    zIndex: 0,
+                  };
+                })
+              );
             },
           },
           draggable: false,
