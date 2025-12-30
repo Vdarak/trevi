@@ -48,6 +48,35 @@ export default function Home() {
       }));
   }, [graphNodes]);
 
+  // Get thread nodes (path from root to current node) for current thread tab
+  const threadNodes = useMemo(() => {
+    if (!currentNodeId || !rootNodeId) return [];
+
+    // Build parent map
+    const parentMap = new Map<string, string>();
+    graphNodes.forEach(n => {
+      if (n.parentId) parentMap.set(n.id, n.parentId);
+    });
+
+    // Trace path from current to root
+    const path: string[] = [];
+    let nodeId: string | null = currentNodeId;
+    while (nodeId) {
+      path.unshift(nodeId);
+      nodeId = parentMap.get(nodeId) || null;
+    }
+
+    // Return nodes on path with payloads
+    return path
+      .map(id => graphNodes.find(n => n.id === id))
+      .filter((n): n is GraphNode => !!n && !!n.payload && n.payload.length > 0)
+      .map(n => ({
+        id: n.id,
+        label: n.label,
+        payload: n.payload || [],
+      }));
+  }, [graphNodes, currentNodeId, rootNodeId]);
+
   // Handle sending a message from the landing page (always creates a new chat)
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
@@ -71,10 +100,19 @@ export default function Home() {
             setRootNodeId(event.node_id);
           }
 
-          const newResponses = [...responsesRef.current, event];
-          responsesRef.current = newResponses;
-          setResponses(newResponses);
-          setGraphNodes(buildGraphFromResponses(newResponses));
+          // Fetch full graph to ensure sidebar has complete data
+          getGraph(event.chat_id)
+            .then((graphResponse) => {
+              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              setGraphNodes(nodes);
+            })
+            .catch(() => {
+              // Fallback to building from responses
+              const newResponses = [...responsesRef.current, event];
+              responsesRef.current = newResponses;
+              setResponses(newResponses);
+              setGraphNodes(buildGraphFromResponses(newResponses));
+            });
 
           setIsStreaming(false);
           setStatusMessage("");
@@ -262,6 +300,7 @@ export default function Home() {
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
         onLogoClick={handleLogoClick}
+        onChatDeleted={handleLogoClick}
       />
 
       {/* Main Content Area - flexes to accommodate right sidebar */}
@@ -293,6 +332,9 @@ export default function Home() {
         <ChatSidebar
           isOpen={isChatSidebarOpen}
           conversationNodes={conversationNodes}
+          threadNodes={threadNodes}
+          rootLabel={graphNodes.find(n => n.id === rootNodeId)?.label || 'Conversation'}
+          activeLabel={graphNodes.find(n => n.id === currentNodeId)?.label}
           isStreaming={isStreaming}
           statusMessage={statusMessage}
           onSendMessage={handleSidebarMessage}

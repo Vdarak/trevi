@@ -20,10 +20,13 @@ interface UseVoiceDictationReturn {
 }
 
 // Extend Window interface for SpeechRecognition
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognitionConstructor = new () => any;
+
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: SpeechRecognitionConstructor;
+    webkitSpeechRecognition: SpeechRecognitionConstructor;
   }
 }
 
@@ -38,19 +41,20 @@ export function useVoiceDictation({
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isAnalyzingRef = useRef(false);
-  
+
   // Track accumulated final transcripts
   const accumulatedTranscriptRef = useRef('');
 
   // Check for browser support
   useEffect(() => {
-    const SpeechRecognitionAPI = 
+    const SpeechRecognitionAPI =
       window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognitionAPI);
   }, []);
@@ -66,11 +70,11 @@ export function useVoiceDictation({
     const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
     // More sensitive normalization and add minimum idle movement
     const normalizedLevel = Math.min(average / 80, 1);
-    
+
     // Add subtle idle animation when not speaking (random micro-movements)
     const idleNoise = 0.05 + Math.random() * 0.08;
     const finalLevel = normalizedLevel > 0.05 ? normalizedLevel : idleNoise;
-    
+
     setAudioLevel(finalLevel);
 
     // Continue the loop using ref
@@ -105,7 +109,7 @@ export function useVoiceDictation({
   const cleanupAudioAnalyzer = useCallback(() => {
     // Stop the animation loop first
     isAnalyzingRef.current = false;
-    
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -132,7 +136,7 @@ export function useVoiceDictation({
       return;
     }
 
-    const SpeechRecognitionAPI = 
+    const SpeechRecognitionAPI =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
     recognitionRef.current = new SpeechRecognitionAPI();
@@ -148,7 +152,8 @@ export function useVoiceDictation({
       setupAudioAnalyzer();
     };
 
-    recognitionRef.current.onresult = (event) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognitionRef.current.onresult = (event: any) => {
       let interimTranscript = '';
       let newFinalTranscript = '';
 
@@ -183,7 +188,8 @@ export function useVoiceDictation({
       onTranscript?.(fullTranscript, !!newFinalTranscript);
     };
 
-    recognitionRef.current.onerror = (event) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognitionRef.current.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       if (event.error !== 'no-speech') {
         setError(`Error: ${event.error}`);

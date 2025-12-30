@@ -172,6 +172,99 @@ Implemented `useLayoutAnimation` hook with:
 
 ---
 
+### Phase 8: Node Conversation Panel & UX Refinements
+
+**Native React Flow Conversation Panel**
+
+Transformed the conversation panel from an externally positioned overlay to a first-class React Flow node:
+
+| Feature | Implementation |
+|---------|----------------|
+| **Custom Node Type** | `ConversationPanelNode` renders as `type: 'conversationPanel'` |
+| **Native Edge Connector** | Bezier curve edge from clicked node to panel |
+| **Canvas Integration** | Panel pans and zooms with the graph naturally |
+| **Animated Entrance** | Scale-in animation originating from parent node position |
+
+**Technical Architecture:**
+```typescript
+// Panel created dynamically on node click
+const panelNode: Node = {
+  id: `panel-${node.id}`,
+  type: 'conversationPanel',
+  position: { x: node.position.x + nodeWidth + 50, y: node.position.y - 150 },
+  data: { messages, label, onClose },
+  zIndex: 9999, // Above hover highlighting
+};
+```
+
+**Unified Horizontal Toolbar**
+
+Consolidated all graph controls into a single toolbar:
+
+```
+[ + ][ - ][ ⊡ ] | [ ⎇ ][ ⎘ ] | [ ↓ ][ → ] | [ 💬 ]
+ Zoom In/Out/Fit   Layout     Direction    Chat
+```
+
+- Replaced React Flow's built-in `<Controls>` with custom zoom buttons
+- Added `zoomIn`, `zoomOut`, `fitView` from `useReactFlow()` hook
+- Visual dividers separate control groups
+- Consistent styling with active blue state on selection
+
+**Markdown Rendering in Conversation**
+
+Implemented `renderSimpleMarkdown()` for message display:
+- **Bold** (`**text**`), *italic* (`*text*`)
+- Inline `code` and code blocks
+- Header formatting (##, ###)
+- Bullet points and numbered lists
+- Link display with underline styling
+
+**Feedback Modal System**
+
+Created multi-step UX survey at `components/feedback/feedback-modal.tsx`:
+
+| Step | Content |
+|------|---------|
+| 1 | Layout preference (Spacious/Compact), Orientation preference (TB/LR) |
+| 2 | Likert scales: Overall usability, Controls clarity, Navigation ease |
+| 3 | Likert scales: Visual clarity, Learning effectiveness + qualitative feedback |
+| 4 | Open-ended improvement suggestions |
+
+- Replaced "ByeWind / Free Plan" in sidebar with feedback button
+- Progress indicator, animated modal, success confirmation
+
+**Global Style Improvements**
+
+| Change | CSS Implementation |
+|--------|-------------------|
+| Hidden scrollbars | `scrollbar-width: none`, `::-webkit-scrollbar { display: none }` |
+| Panel animation | `transform-origin: left center` for parent-node-based spawn |
+| Edge styling | Solid blue (`#3b82f6`) instead of dashed gray |
+
+**State Cleanup Improvements**
+
+Fixed hover state persistence after closing conversation panel:
+```typescript
+onClose: () => {
+  // Remove panel elements
+  setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
+  setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+  // Clear hover state
+  setHoveredNodeId(null);
+  // Reset node highlighting
+  setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, isHighlighted: false } })));
+  // Reset edge styling
+  setEdges(eds => eds.map(e => ({ ...e, style: { stroke: "#94a3b8", strokeWidth: 2 }, animated: false, zIndex: 0 })));
+};
+```
+
+**Canvas Zoom Limits**
+- Extended `minZoom` from 0.3 to 0.05 (6x more zoom-out for large graphs)
+- Set `maxZoom` to 1.15 for comfortable reading
+
+---
+
 ## Technical Architecture
 
 ### File Structure Impact
@@ -183,20 +276,25 @@ lib/
 
 components/
 ├── graph/
-│   └── knowledge-graph.tsx  # 1000+ lines: layout, animation, interaction
+│   └── knowledge-graph.tsx  # 1300+ lines: layout, animation, interaction, ConversationPanelNode
 ├── chat/
-│   └── chat-interface.tsx   # Voice dictation, suggestions
+│   ├── chat-interface.tsx   # Voice dictation, suggestions
+│   ├── chat-sidebar.tsx     # Full conversation view
+│   └── node-conversation-panel.tsx  # Legacy (now integrated in graph)
+├── feedback/
+│   └── feedback-modal.tsx   # UX survey modal with Likert scales
 ├── layout/
-│   └── sidebar.tsx          # Chat history, navigation
+│   └── sidebar.tsx          # Chat history, navigation, feedback button
 └── ui/                      # Button, Input, Card primitives
 
 app/
 ├── page.tsx        # State orchestration, view routing
-└── globals.css     # Design tokens, custom animations
+└── globals.css     # Design tokens, custom animations, scrollbar hiding
 
 docs/
 ├── MESSAGES_API.md           # Backend API documentation
-└── REACT_FLOW_ARCHITECTURE.md # Graph usage guide
+├── REACT_FLOW_ARCHITECTURE.md # Graph usage guide
+└── PROJECT_EVOLUTION.md      # This document
 ```
 
 ### State Flow
@@ -273,11 +371,15 @@ User Input → sendMessage() → SSE Stream
 - [ ] Measure actual DOM widths post-render for pixel-perfect layouts
 - [ ] Store collapse state in localStorage for persistence
 - [ ] Add keyboard navigation and ARIA attributes for accessibility
+- [x] ~~Custom zoom controls in unified toolbar~~
+- [x] ~~Conversation panel as native React Flow node~~
 
 ### Medium-term
 - [ ] Web Worker for layout computation on large graphs
 - [ ] Hybrid animation: CSS transforms for nodes, RAF for edges
 - [ ] Rich tooltip component with scroll and link handling
+- [x] ~~Feedback collection modal for UX research~~
+- [x] ~~Markdown rendering in conversation panels~~
 
 ### Long-term
 - [ ] Low-fidelity mode for very large graphs (reduced animations)

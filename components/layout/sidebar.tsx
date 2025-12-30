@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { MessageSquare, Plus } from 'lucide-react';
+import { MessageSquare, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { getChats, formatRelativeTime, type Chat } from '@/lib/api';
+import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -13,6 +13,7 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onChatSelect?: (chatId: string) => void;
   onNewChat?: () => void;
   onLogoClick?: () => void;
+  onChatDeleted?: () => void;
 }
 
 export function Sidebar({
@@ -21,11 +22,14 @@ export function Sidebar({
   onChatSelect,
   onNewChat,
   onLogoClick,
+  onChatDeleted,
   ...props
 }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
 
   const fetchChats = async () => {
     try {
@@ -48,6 +52,25 @@ export function Sidebar({
       fetchChats();
     }
   }, [selectedChatId]);
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent chat selection
+
+    if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingChatId(chatId);
+    try {
+      await deleteChat(chatId);
+      await fetchChats();
+      onChatDeleted?.();
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+    } finally {
+      setDeletingChatId(null);
+    }
+  };
 
   return (
     <div className={cn("w-64 border-r border-slate-200 bg-slate-50/40 h-screen flex flex-col", className)} {...props}>
@@ -79,24 +102,42 @@ export function Sidebar({
               <p className="px-4 text-sm text-slate-400">No chats yet</p>
             ) : (
               chats.map((chat) => (
-                <Button
+                <div
                   key={chat.chat_id}
-                  variant={selectedChatId === chat.chat_id ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start font-normal h-auto py-2 text-left",
-                    selectedChatId === chat.chat_id && "bg-slate-200"
-                  )}
-                  onClick={() => onChatSelect?.(chat.chat_id)}
+                  className="relative group"
+                  onMouseEnter={() => setHoveredChatId(chat.chat_id)}
+                  onMouseLeave={() => setHoveredChatId(null)}
                 >
-                  <div className="flex flex-col items-start w-full">
-                    <span className="text-sm text-slate-700 truncate w-full">
-                      {chat.chat_name}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {formatRelativeTime(chat.created_at)}
-                    </span>
-                  </div>
-                </Button>
+                  <Button
+                    variant={selectedChatId === chat.chat_id ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start font-normal h-auto py-2 text-left pr-10",
+                      selectedChatId === chat.chat_id && "bg-slate-200"
+                    )}
+                    onClick={() => onChatSelect?.(chat.chat_id)}
+                  >
+                    <div className="flex flex-col items-start w-full">
+                      <span className="text-sm text-slate-700 truncate w-full">
+                        {chat.chat_name}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {formatRelativeTime(chat.created_at)}
+                      </span>
+                    </div>
+                  </Button>
+
+                  {/* Delete button - appears on hover */}
+                  {hoveredChatId === chat.chat_id && (
+                    <button
+                      onClick={(e) => handleDeleteChat(chat.chat_id, e)}
+                      disabled={deletingChatId === chat.chat_id}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               ))
             )}
           </div>
@@ -112,3 +153,4 @@ export function Sidebar({
     </div>
   );
 }
+

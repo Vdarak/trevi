@@ -16,7 +16,7 @@ import {
   Handle,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2 } from 'lucide-react';
+import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass } from 'lucide-react';
 import { CompleteEvent, MessagePayload } from '@/lib/api';
 import { hierarchy, tree } from 'd3-hierarchy';
 import { NodeConversationPanel } from '@/components/chat/node-conversation-panel';
@@ -300,11 +300,14 @@ function getTidyTreeLayout(
         targetPosition: isLR ? Position.Left : Position.Top,
         sourcePosition: isLR ? Position.Right : Position.Bottom,
         position: isLR
-          ? { x: d3Node.y, y: d3Node.x } // Swap for LR: d3.y is depth(x), d3.x is breadth(y)
-          : { x: d3Node.x, y: d3Node.y },
+          ? { x: d3Node.y ?? 0, y: d3Node.x ?? 0 } // Swap for LR: d3.y is depth(x), d3.x is breadth(y)
+          : { x: d3Node.x ?? 0, y: d3Node.y ?? 0 },
       };
     }
-    return node;
+    return {
+      ...node,
+      position: { x: node.position?.x ?? 0, y: node.position?.y ?? 0 },
+    };
   });
 
   return { nodes: layoutedNodes, edges };
@@ -381,8 +384,13 @@ interface ConceptNodeData {
   isLoading?: boolean;
   parentId?: string | null; // Added for animation logic
   direction?: 'TB' | 'LR'; // Layout direction for positioning floating chevron
+  depth?: number; // Depth in tree (0 = root, 1 = first level, etc.)
+  isExpanded?: boolean; // True if showing inline conversation
+  messages?: MessagePayload[]; // Messages to show when expanded
   onToggleCollapse?: () => void;
   onDirectionClick?: () => void;
+  onExpand?: () => void;
+  onCloseExpanded?: () => void;
   [key: string]: unknown;
 }
 
@@ -419,29 +427,137 @@ function ChevronUpIcon({ className = "" }: { className?: string }) {
   );
 }
 
-
 function ExploreIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 107 107" fill="none" className={`w-full h-full ${className}`} xmlns="http://www.w3.org/2000/svg">
-      <g clipPath="url(#clip-explore)">
-        <path d="M32.4394 95.1662C31.4592 94.657 31.0774 93.4496 31.5866 92.4694C32.0959 91.4892 33.3033 91.1074 34.2835 91.6166C40.2755 94.7296 46.9411 96.3772 53.8479 96.3772C77.32 96.3772 96.3479 77.3493 96.3479 53.8772C96.3479 46.9644 94.6974 40.2931 91.5792 34.2971C91.0696 33.3171 91.4508 32.1095 92.4308 31.5999C93.4108 31.0903 94.6184 31.4716 95.128 32.4515C98.5409 39.0142 100.348 46.318 100.348 53.8772C100.348 79.5584 79.5291 100.377 53.8479 100.377C46.2954 100.377 38.9977 98.5734 32.4394 95.1662ZM73.1762 11.5726C74.1806 12.0323 74.6222 13.2191 74.1626 14.2235C73.703 15.2279 72.5162 15.6695 71.5118 15.2099C66.0175 12.6958 60.0278 11.3772 53.8479 11.3772C30.3758 11.3772 11.3479 30.4051 11.3479 53.8772C11.3479 60.0671 12.6708 66.0663 15.1928 71.5677C15.6531 72.5718 15.2123 73.7589 14.2082 74.2192C13.2041 74.6795 12.017 74.2387 11.5567 73.2346C8.7961 67.2128 7.3479 60.6454 7.3479 53.8772C7.3479 28.196 28.1667 7.3772 53.8479 7.3772C60.6051 7.3772 67.1622 8.82069 73.1762 11.5726Z" fill="currentColor" />
-        <path d="M59.7067 59.7067L91.1235 15.6016L47.0184 47.0184L15.6016 91.1235L59.7067 59.7067ZM13.0744 97.8347C12.0327 98.5767 10.6351 98.5767 9.59334 97.8347C8.24385 96.8734 7.92913 95.0002 8.89039 93.6507L44.1503 44.1503L93.6507 8.89039C95.0002 7.92912 96.8734 8.24384 97.8347 9.59334C98.5767 10.6351 98.5767 12.0327 97.8347 13.0744L62.5747 62.5747L13.0744 97.8347Z" fill="currentColor" />
-        <path d="M44.0956 47.2383L46.9241 44.4099L62.4804 59.9663L59.652 62.7947L44.0956 47.2383Z" fill="currentColor" />
-      </g>
-      <defs>
-        <clipPath id="clip-explore">
-          <rect width="106.725" height="106.725" fill="white" />
-        </clipPath>
-      </defs>
-    </svg>
-  );
+  return <Compass className={`w-full h-full ${className}`} strokeWidth={2} />;
 }
+
+// Simple markdown renderer for conversation messages with citation support
+function renderSimpleMarkdown(text: string): React.ReactNode {
+  // FIRST: Protect markdown links by replacing them with placeholders
+  const links: { text: string; url: string }[] = [];
+  let processedText = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+    links.push({ text: linkText, url });
+    return `__LINK_${links.length - 1}__`;
+  });
+
+  // SECOND: Extract citations [index: title] - must have colon
+  const citations: { index: string; title: string }[] = [];
+  processedText = processedText.replace(/\[(\d+):\s*([^\]]+)\]/g, (match, index, title) => {
+    citations.push({ index, title: title.trim() });
+    return `__CITATION_${citations.length - 1}__`;
+  });
+
+  // THIRD: Handle standalone reference numbers [n]
+  processedText = processedText.replace(/\[(\d+)\]/g, '<sup class="text-blue-600 font-medium text-[9px]">[$1]</sup>');
+
+  // Handle bold **text**
+  processedText = processedText.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Handle italic *text*
+  processedText = processedText.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Handle inline code `code`
+  processedText = processedText.replace(/`([^`]+)`/g, '<code class="bg-slate-200/50 px-1 rounded text-[10px]">$1</code>');
+  // Handle headers ### text
+  processedText = processedText.replace(/^###\s+(.+)$/gm, '<strong class="text-slate-700">$1</strong>');
+  processedText = processedText.replace(/^##\s+(.+)$/gm, '<strong class="text-slate-800">$1</strong>');
+  // Handle numbered lists and bullet points
+  processedText = processedText.replace(/^\d+\.\s+/gm, '• ');
+  processedText = processedText.replace(/^-\s+/gm, '• ');
+
+  // FOURTH: Restore links with proper HTML
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    processedText = processedText.replace(
+      `__LINK_${i}__`,
+      `<a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline cursor-pointer">${link.text}</a>`
+    );
+  }
+
+  // If no citations, use simple HTML rendering
+  if (citations.length === 0) {
+    return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
+  }
+
+  // Split by citation placeholders and interleave with citation components
+  const parts = processedText.split(/__CITATION_(\d+)__/);
+  const elements: React.ReactNode[] = [];
+
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      // Regular text
+      if (parts[i]) {
+        elements.push(<span key={`text-${i}`} dangerouslySetInnerHTML={{ __html: parts[i] }} />);
+      }
+    } else {
+      // Citation index
+      const citationIndex = parseInt(parts[i], 10);
+      const citation = citations[citationIndex];
+      if (citation) {
+        elements.push(
+          <span
+            key={`cite-${i}`}
+            className="inline relative group cursor-pointer align-baseline"
+            title={citation.title}
+          >
+            <sup className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors">
+              {citation.index}
+            </sup>
+            {/* Tooltip on hover */}
+            <span className="absolute left-0 bottom-full mb-1 z-50 hidden group-hover:block w-max max-w-[200px] px-2 py-1 text-[10px] bg-slate-800 text-white rounded shadow-lg pointer-events-none whitespace-normal">
+              {citation.title}
+            </span>
+          </span>
+        );
+      }
+    }
+  }
+
+  return <>{elements}</>;
+}
+
 
 function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNodeData, targetPosition?: Position, sourcePosition?: Position }) {
   const isClickableDirection = data.isDirection && !data.hasChildren;
   const showCollapsedDots = data.isCollapsed && data.hasChildren && (data.childCount ?? 0) > 0;
   const direction = data.direction || 'TB';
   const isHorizontal = direction === 'LR';
+
+  // Hierarchy-based styling
+  const isParentNode = data.hasChildren;
+
+  // Size scaling based on hierarchy
+  const sizeClass = data.isRoot
+    ? 'px-6 py-4' // Root: largest
+    : isParentNode
+      ? 'px-5 py-3' // Parents: normal
+      : 'px-4 py-2.5'; // Leaves: compact
+
+  // Border thickness based on hierarchy
+  const borderClass = data.isRoot
+    ? 'border-[3px]'
+    : isParentNode
+      ? 'border-2'
+      : 'border';
+
+  // Border radius - pill for root, rounded for others
+  const radiusClass = data.isRoot
+    ? 'rounded-full'
+    : isParentNode
+      ? 'rounded-xl'
+      : 'rounded-lg';
+
+  // Shadow scaling
+  const shadowClass = data.isRoot
+    ? 'shadow-lg'
+    : isParentNode
+      ? 'shadow-md'
+      : 'shadow-sm';
+
+  // Text styling
+  const textClass = data.isRoot
+    ? 'font-bold text-base'
+    : isParentNode
+      ? 'font-semibold text-sm'
+      : 'font-medium text-sm';
 
   // Determine which chevron icons to use based on direction and collapse state
   const getExpandIcon = () => {
@@ -454,12 +570,13 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
     return <ChevronUpIcon />;
   };
 
+  // Render normal node view
   return (
     <div className={`relative ${isHorizontal ? 'flex items-center' : 'flex flex-col items-center'}`}>
       {/* Main node box */}
       <div
         className={`
-          relative px-5 py-3 rounded-lg border-2 shadow-sm transition-all duration-200 flex items-center gap-3 whitespace-nowrap
+          relative ${sizeClass} ${borderClass} ${radiusClass} ${shadowClass} transition-all duration-200 flex items-center gap-3 whitespace-nowrap
           ${data.isRoot
             ? "bg-slate-900 text-white border-slate-900"
             : data.isLoading
@@ -468,7 +585,9 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
                 ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:border-blue-400 cursor-pointer hover:shadow-md"
                 : data.isHighlighted
                   ? "bg-blue-50 border-blue-400 shadow-md"
-                  : "bg-white border-slate-200 hover:border-slate-300"
+                  : isParentNode
+                    ? `bg-slate-50 border-slate-300 hover:border-slate-400`
+                    : "bg-white border-slate-200 hover:border-slate-300"
           }
         `}
         onClick={(e) => {
@@ -489,7 +608,7 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
         )}
 
         {/* Node label */}
-        <div className={`font-medium text-sm text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : "text-slate-800"}`}>
+        <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
           {data.label}
         </div>
 
@@ -575,38 +694,20 @@ interface ConversationPanelNodeData {
   onClose: () => void;
 }
 
-// Simple markdown renderer for conversation messages
-function renderSimpleMarkdown(text: string): React.ReactNode {
-  // Handle bold **text**
-  let result = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  // Handle italic *text*
-  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  // Handle inline code `code`
-  result = result.replace(/`([^`]+)`/g, '<code class="bg-slate-200/50 px-1 rounded text-[10px]">$1</code>');
-  // Handle links [text](url) - simplified display
-  result = result.replace(/\[([^\]]+)\]\([^)]+\)/g, '<span class="text-blue-500 underline">$1</span>');
-  // Handle headers ### text
-  result = result.replace(/^###\s+(.+)$/gm, '<strong class="text-slate-700">$1</strong>');
-  result = result.replace(/^##\s+(.+)$/gm, '<strong class="text-slate-800">$1</strong>');
-  // Handle numbered lists and bullet points
-  result = result.replace(/^\d+\.\s+/gm, '• ');
-  result = result.replace(/^-\s+/gm, '• ');
-  return <span dangerouslySetInnerHTML={{ __html: result }} />;
-}
-
 function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
   return (
     <div
-      className="w-[380px] h-[500px] bg-white/90 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-2xl flex flex-col animate-scale-in"
+      className="w-[380px] h-[500px] bg-white/95 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-2xl flex flex-col animate-scale-in relative"
       style={{
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%)',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.95) 100%)',
       }}
     >
-      {/* Target Handle on left center - matches node connector styling */}
+      {/* Target Handle on left center - solid dot matching node styling */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!bg-transparent !w-2 !h-2 !border-2 !border-slate-300 !-left-1"
+        className="!bg-slate-400 !w-3 !h-3 !border-0 !rounded-full"
+        style={{ left: -6 }}
       />
 
       {/* Header */}
@@ -625,8 +726,11 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
         </button>
       </div>
 
-      {/* Messages - scrollable */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3">
+      {/* Messages - visible scrollbar */}
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
+      >
         {data.messages.map((msg, index) => (
           <div
             key={index}
@@ -690,8 +794,8 @@ function useLayoutAnimation(
   onAnimationComplete?: () => void
 ) {
   const { getNodes } = useReactFlow();
-  const animationFrameRef = useRef<number>();
-  const startTimeRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number | null>(null);
   const startNodesRef = useRef<Map<string, Node>>(new Map());
 
   // We need to track the *previous* targetNodes to know if we should animate
@@ -844,7 +948,7 @@ function useLayoutAnimation(
           style: {
             ...node.style,
             opacity: 1 - t, // Fade out to 0
-            pointerEvents: 'none', // Disable interaction while exiting
+            pointerEvents: 'none' as const, // Disable interaction while exiting
           }
         };
       });
@@ -854,7 +958,7 @@ function useLayoutAnimation(
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        startTimeRef.current = undefined;
+        startTimeRef.current = null;
         // Final state: only target nodes
         setNodes(targetNodes);
         onAnimationComplete?.();
@@ -863,7 +967,7 @@ function useLayoutAnimation(
 
     // Cancel previous animation
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    startTimeRef.current = undefined;
+    startTimeRef.current = null;
     animationFrameRef.current = requestAnimationFrame(animate);
 
     // Update edges immediately - they will follow the nodes as they move
@@ -890,6 +994,8 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
   const [layoutMode, setLayoutMode] = useState<'custom' | 'tidy'>('custom');
   const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
+  const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null); // Track clicked/active node for persistent path highlighting
 
   // Node conversation panel state - uses FLOW coordinates to pan/zoom with graph
   const [selectedNodePanel, setSelectedNodePanel] = useState<{
@@ -957,6 +1063,15 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     // Filter out hidden nodes
     const visibleNodes = graphNodes.filter((n) => !hiddenNodes.has(n.id));
 
+    // Calculate depth for each node
+    const depthMap = new Map<string, number>();
+    function calculateDepth(nodeId: string, depth: number) {
+      depthMap.set(nodeId, depth);
+      const children = childMap.get(nodeId) || [];
+      children.forEach(childId => calculateDepth(childId, depth + 1));
+    }
+    calculateDepth(root, 0);
+
     const rfNodes: Node[] = visibleNodes.map((node) => ({
       id: node.id,
       type: "concept",
@@ -971,6 +1086,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         isLoading: node.id === loadingNodeId,
         parentId: node.parentId, // Pass parentId for animation
         direction: direction, // Pass direction for floating chevron positioning
+        depth: depthMap.get(node.id) || 0, // Pass depth for hierarchy styling
       },
     }));
 
@@ -1009,17 +1125,23 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   // Re-sync when layoutedNodes change - completely replace the nodes/edges arrays
   // We use useLayoutAnimation to handle the transition
   const nodesWithHandlers = useMemo(() => {
-    return layoutedNodes.map((node) => ({
-      ...node,
-      // Ensure position is explicitly set
-      position: { ...node.position },
-      data: {
-        ...node.data,
-        onToggleCollapse: () => toggleCollapse(node.id),
-        onDirectionClick: () => onDirectionClick?.(node.id),
-      },
-    }));
-  }, [layoutedNodes, toggleCollapse, onDirectionClick]);
+    return layoutedNodes.map((node) => {
+      const graphNode = graphNodes.find(n => n.id === node.id);
+      return {
+        ...node,
+        // Ensure position is explicitly set
+        position: { ...node.position },
+        data: {
+          ...node.data,
+          isExpanded: expandedNodeId === node.id,
+          messages: graphNode?.payload || [],
+          onToggleCollapse: () => toggleCollapse(node.id),
+          onDirectionClick: () => onDirectionClick?.(node.id),
+          onCloseExpanded: () => setExpandedNodeId(null),
+        },
+      };
+    });
+  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes]);
 
   useLayoutAnimation(
     nodesWithHandlers,
@@ -1035,41 +1157,58 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     }, [fitView, nodesWithHandlers.length])
   );
 
-  // Update nodes/edges when hovering to show path to root
+  // Update nodes/edges when hovering to show path to root (layered on top of active path)
   const handleNodeMouseEnter = useCallback(
     (event: React.MouseEvent, node: Node) => {
       setHoveredNodeId(node.id);
       setTooltipPosition({ x: event.clientX, y: event.clientY });
 
-      const { nodeIds, edgeIds } = findPathToRoot(node.id, edges, rootId);
+      const { nodeIds: hoverNodeIds, edgeIds: hoverEdgeIds } = findPathToRoot(node.id, edges, rootId);
 
-      // Update node highlighting
+      // Get active path if exists
+      const activePath = activeNodeId ? findPathToRoot(activeNodeId, edges, rootId) : { nodeIds: new Set<string>(), edgeIds: new Set<string>() };
+
+      // Update node highlighting (hover takes priority, but active also highlighted)
       setNodes((nds) =>
         nds.map((n) => ({
           ...n,
-          data: { ...n.data, isHighlighted: nodeIds.has(n.id) },
+          data: { ...n.data, isHighlighted: hoverNodeIds.has(n.id) || activePath.nodeIds.has(n.id) },
         }))
       );
 
-      // Update edge styling - highlight path to root (but preserve panel edge)
+      // Update edge styling - hover path thickest, active path thick, others normal
       setEdges((eds) =>
         eds.map((e) => {
-          // Preserve panel edge styling
-          if (e.id.startsWith('panel-edge-')) {
-            return e;
+          if (e.id.startsWith('panel-edge-')) return e;
+
+          const isHoverPath = hoverEdgeIds.has(e.id);
+          const isActivePath = activePath.edgeIds.has(e.id);
+
+          if (isHoverPath) {
+            return {
+              ...e,
+              style: { stroke: "#3b82f6", strokeWidth: 5 },
+              animated: true,
+              zIndex: 1001,
+            };
+          } else if (isActivePath) {
+            return {
+              ...e,
+              style: { stroke: "#3b82f6", strokeWidth: 5 },
+              animated: true,
+              zIndex: 1000,
+            };
           }
           return {
             ...e,
-            style: edgeIds.has(e.id)
-              ? { stroke: "#3b82f6", strokeWidth: 3 }
-              : { stroke: "#e2e8f0", strokeWidth: 2 },
-            animated: edgeIds.has(e.id),
-            zIndex: edgeIds.has(e.id) ? 1000 : 0,
+            style: { stroke: "#e2e8f0", strokeWidth: 2 },
+            animated: false,
+            zIndex: 0,
           };
         })
       );
     },
-    [edges, rootId, setNodes, setEdges]
+    [edges, rootId, activeNodeId, setNodes, setEdges]
   );
 
   // Track mouse movement for tooltip
@@ -1082,34 +1221,66 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const handleNodeMouseLeave = useCallback(() => {
     setHoveredNodeId(null);
 
-    // Reset node highlighting
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        data: { ...n.data, isHighlighted: false },
-      }))
-    );
+    // If there's an active node, revert to showing active path; otherwise clear all
+    if (activeNodeId) {
+      const { nodeIds, edgeIds } = findPathToRoot(activeNodeId, edges, rootId);
 
-    // Reset edge styling (but preserve panel edge)
-    setEdges((eds) =>
-      eds.map((e) => {
-        // Preserve panel edge styling
-        if (e.id.startsWith('panel-edge-')) {
-          return e;
-        }
-        return {
-          ...e,
-          style: { stroke: "#94a3b8", strokeWidth: 2 },
-          animated: false,
-          zIndex: 0,
-        };
-      })
-    );
-  }, [setNodes, setEdges]);
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          data: { ...n.data, isHighlighted: nodeIds.has(n.id) },
+        }))
+      );
+
+      setEdges((eds) =>
+        eds.map((e) => {
+          if (e.id.startsWith('panel-edge-')) return e;
+
+          if (edgeIds.has(e.id)) {
+            return {
+              ...e,
+              style: { stroke: "#3b82f6", strokeWidth: 5 },
+              animated: true,
+              zIndex: 1000,
+            };
+          }
+          return {
+            ...e,
+            style: { stroke: "#94a3b8", strokeWidth: 2 },
+            animated: false,
+            zIndex: 0,
+          };
+        })
+      );
+    } else {
+      // No active node, clear all highlighting
+      setNodes((nds) =>
+        nds.map((n) => ({
+          ...n,
+          data: { ...n.data, isHighlighted: false },
+        }))
+      );
+
+      setEdges((eds) =>
+        eds.map((e) => {
+          if (e.id.startsWith('panel-edge-')) return e;
+          return {
+            ...e,
+            style: { stroke: "#94a3b8", strokeWidth: 2 },
+            animated: false,
+            zIndex: 0,
+          };
+        })
+      );
+    }
+  }, [activeNodeId, edges, rootId, setNodes, setEdges]);
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
       onNodeClick?.(node.id);
+
+      // Set this node as the active node for persistent path highlighting
+      setActiveNodeId(node.id);
 
       // Find the graph node data to check for messages
       const graphNode = graphNodes.find(n => n.id === node.id);
@@ -1117,6 +1288,35 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       // First, remove any existing panel node and its edge
       setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
       setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+
+      // Apply active path highlighting immediately
+      const { nodeIds, edgeIds } = findPathToRoot(node.id, edges, rootId);
+
+      setNodes((nds) =>
+        nds.filter(n => n.type !== 'conversationPanel').map((n) => ({
+          ...n,
+          data: { ...n.data, isHighlighted: nodeIds.has(n.id) },
+        }))
+      );
+
+      setEdges((eds) =>
+        eds.filter(e => !e.id.startsWith('panel-edge-')).map((e) => {
+          if (edgeIds.has(e.id)) {
+            return {
+              ...e,
+              style: { stroke: "#60a5fa", strokeWidth: 3 },
+              animated: true,
+              zIndex: 1000,
+            };
+          }
+          return {
+            ...e,
+            style: { stroke: "#94a3b8", strokeWidth: 2 },
+            animated: false,
+            zIndex: 0,
+          };
+        })
+      );
 
       if (graphNode?.payload && graphNode.payload.length > 0) {
         const nodeWidth = getNodeWidth(graphNode.label);
@@ -1134,33 +1334,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             messages: graphNode.payload,
             label: graphNode.label,
             onClose: () => {
-              // 1. Remove panel node and edge
+              // Keep activeNodeId - path highlighting should persist for context
+              // Only remove the panel node and edge
               setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
               setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
 
-              // 2. Clear hovered state
+              // Clear hovered state
               setHoveredNodeId(null);
-
-              // 3. Reset node highlighting
-              setNodes((nds) =>
-                nds.map((n) => ({
-                  ...n,
-                  data: { ...n.data, isHighlighted: false },
-                }))
-              );
-
-              // 4. Reset edge styling
-              setEdges((eds) =>
-                eds.map((e) => {
-                  if (e.id.startsWith('panel-edge-')) return e;
-                  return {
-                    ...e,
-                    style: { stroke: "#94a3b8", strokeWidth: 2 },
-                    animated: false,
-                    zIndex: 0,
-                  };
-                })
-              );
             },
           },
           draggable: false,
@@ -1174,7 +1354,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           source: node.id,
           target: `panel-${node.id}`,
           type: 'default', // bezier curve
-          style: { stroke: '#3b82f6', strokeWidth: 2 },
+          style: { stroke: '#3b82f6', strokeWidth: 3 },
           animated: false,
           zIndex: 9998,
         };
@@ -1188,7 +1368,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         setSelectedNodePanel(null);
       }
     },
-    [onNodeClick, graphNodes, setNodes, setEdges]
+    [onNodeClick, graphNodes, edges, rootId, setNodes, setEdges]
   );
 
   if (graphNodes.length === 0) {

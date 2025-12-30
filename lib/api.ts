@@ -428,6 +428,98 @@ export async function sendMessage(
 }
 
 // ============================================================================
+// Chat & Node Management APIs
+// ============================================================================
+
+/**
+ * Deletes a chat and all associated data permanently.
+ * 
+ * @param chatId - The chat ID to delete
+ * 
+ * @example
+ * await deleteChat("chat-uuid-xyz");
+ */
+export async function deleteChat(chatId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/sessions/chat/delete`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete chat: ${response.statusText}`);
+  }
+}
+
+/** History response from /sessions/history API */
+export interface HistoryResponse {
+  session_id: string;
+  chat_id: string;
+  history: MessagePayload[];
+  path: string[]; // node IDs from root to current
+}
+
+/**
+ * Fetches conversation history from root to current node.
+ * 
+ * @param chatId - The chat ID to fetch history for
+ * @returns History response with messages and path
+ * 
+ * @example
+ * const { history, path } = await getHistory("chat-uuid-xyz");
+ */
+export async function getHistory(chatId: string): Promise<HistoryResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/history`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch history: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/** Response from node deletion API */
+export interface DeleteNodeResponse {
+  chat_id: string;
+  session_id: string;
+  deleted_node_id: string;
+  deleted_count: number;
+  current_node: string;
+  graph: GraphResponse['graph'];
+}
+
+/**
+ * Deletes a node and all its descendants, updating current_node to parent.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID to delete
+ * @returns Updated graph with deleted count
+ * 
+ * @example
+ * const result = await deleteNode("chat-123", "node-456");
+ */
+export async function deleteNode(chatId: string, nodeId: string): Promise<DeleteNodeResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/chat/delete/node`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, node_id: nodeId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete node: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ============================================================================
 // Utilities
 // ============================================================================
 
