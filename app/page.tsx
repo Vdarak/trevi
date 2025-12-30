@@ -301,6 +301,7 @@ export default function Home() {
         onNewChat={handleNewChat}
         onLogoClick={handleLogoClick}
         onChatDeleted={handleLogoClick}
+        isCreatingChat={isCreatingChat}
       />
 
       {/* Main Content Area - flexes to accommodate right sidebar */}

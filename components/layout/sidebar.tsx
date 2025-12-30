@@ -14,6 +14,7 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onNewChat?: () => void;
   onLogoClick?: () => void;
   onChatDeleted?: () => void;
+  isCreatingChat?: boolean;
 }
 
 export function Sidebar({
@@ -23,6 +24,7 @@ export function Sidebar({
   onNewChat,
   onLogoClick,
   onChatDeleted,
+  isCreatingChat,
   ...props
 }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -96,6 +98,18 @@ export function Sidebar({
             Chats
           </h2>
           <div className="space-y-1">
+            {/* Show loading state when creating a new chat */}
+            {isCreatingChat && (
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-slate-400 font-normal italic animate-pulse"
+                disabled
+              >
+                <div className="w-4 h-4 mr-2 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                New Chat...
+              </Button>
+            )}
+
             {loading ? (
               <p className="px-4 text-sm text-slate-400">Loading...</p>
             ) : chats.length === 0 ? (

@@ -639,7 +639,7 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
             data.onToggleCollapse?.();
           }}
           className={`
-            relative flex items-center justify-center
+            relative flex items-center justify-center cursor-pointer
             transition-all duration-200 ease-out
             ${isHorizontal
               ? 'ml-1 w-6 h-8'
@@ -1006,11 +1006,36 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     nodeWidth: number;
   } | null>(null);
 
+
   // Track viewport for reactive panel positioning
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
 
   // Track if we've done the initial fitView
   const hasInitialFitRef = useRef(false);
+  // Track previous loading state to detect completion
+  const prevLoadingRef = useRef(false);
+  // Track previous node count
+  const prevNodeCountRef = useRef(0);
+
+  // Auto-fit view when loading completes or new nodes are added
+  useEffect(() => {
+    const isLoading = !!loadingNodeId;
+    const wasLoading = prevLoadingRef.current;
+    const nodeCount = graphNodes.length;
+    const prevNodeCount = prevNodeCountRef.current;
+
+    // Trigger fitView if:
+    // 1. Loading just finished (wasLoading=true, isLoading=false)
+    // 2. New nodes were added (nodeCount > prevNodeCount) AND we are not currently loading
+    if ((wasLoading && !isLoading) || (nodeCount > prevNodeCount && !isLoading)) {
+      setTimeout(() => {
+        fitView({ padding: 0.3, duration: 600 });
+      }, 100); // Small delay to ensure nodes are rendered
+    }
+
+    prevLoadingRef.current = isLoading;
+    prevNodeCountRef.current = nodeCount;
+  }, [loadingNodeId, graphNodes.length, fitView]);
 
   // Get the summary of hovered node
   const hoveredSummary = useMemo(() => {
