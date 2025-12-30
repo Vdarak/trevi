@@ -187,11 +187,11 @@ export async function getGraph(chatId: string): Promise<GraphResponse> {
  * Converts GraphResponse into GraphNode array for the KnowledgeGraph component.
  */
 export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
-  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean }>;
+  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[] }>;
   currentNodeId: string;
   rootNodeId: string | null;
 } {
-  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean }> = [];
+  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[] }> = [];
   let rootNodeId: string | null = null;
 
   // Build a map of node ID to parent ID from edges
@@ -208,13 +208,14 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
     }
 
     const parentId = parentMap.get(nodeData.id) || null;
-    
+
     nodes.push({
       id: nodeData.id,
       label: nodeData.node_label,
       summary: nodeData.display_summary,
       parentId: parentId === "root" ? null : parentId,
       isDirection: nodeData.type === "direction",
+      payload: nodeData.payload,
     });
 
     // Find root node (parent is "root" or no parent)
@@ -352,7 +353,7 @@ export async function sendMessage(
     try {
       const parsed = JSON.parse(data);
       console.log(`SSE Event [${eventType}]:`, parsed);
-      
+
       switch (eventType) {
         case "update":
           onUpdate?.(parsed as UpdateEvent);
@@ -379,17 +380,17 @@ export async function sendMessage(
     }
 
     buffer += decoder.decode(value, { stream: true });
-    
+
     // Process complete SSE messages (separated by double newlines)
     const messages = buffer.split("\n\n");
     buffer = messages.pop() || ""; // Keep incomplete message in buffer
 
     for (const message of messages) {
       if (!message.trim()) continue;
-      
+
       let eventType = "";
       let eventData = "";
-      
+
       const lines = message.split("\n");
       for (const line of lines) {
         if (line.startsWith("event:")) {
@@ -398,19 +399,19 @@ export async function sendMessage(
           eventData = line.slice(5).trim();
         }
       }
-      
+
       if (eventType && eventData) {
         processEvent(eventType, eventData);
       }
     }
   }
-  
+
   // Process any remaining data in buffer after stream ends
   if (buffer.trim()) {
     console.log("Processing remaining buffer after stream end:", buffer);
     let eventType = "";
     let eventData = "";
-    
+
     const lines = buffer.split("\n");
     for (const line of lines) {
       if (line.startsWith("event:")) {
@@ -419,7 +420,7 @@ export async function sendMessage(
         eventData = line.slice(5).trim();
       }
     }
-    
+
     if (eventType && eventData) {
       processEvent(eventType, eventData);
     }
@@ -455,6 +456,6 @@ export function formatRelativeTime(dateString: string): string {
   if (diffHours < 24) return `${diffHours} hours ago`;
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
-  
+
   return date.toLocaleDateString();
 }

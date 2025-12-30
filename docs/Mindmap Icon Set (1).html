@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mindmap Icon Set - Convergence & Divergence</title>
+    <style>
+        :root {
+            --color-primary: #2180 8D;
+            --color-primary-hover: #2DA6B2;
+            --color-primary-active: #1A6C73;
+            --color-text: #134252;
+            --color-bg: #FCF8F5;
+            --color-surface: #FFFFFE;
+            --color-border: rgba(94, 82, 64, 0.2);
+            --duration: 200ms;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #FCF8F5 0%, #FFFFFE 100%);
+            color: var(--color-text);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 12px;
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(19, 66, 82, 0.7);
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 32px;
+            margin-bottom: 48px;
+        }
+
+        .card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: box-shadow 300ms ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 24px rgba(33, 128, 141, 0.12);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--color-text);
+        }
+
+        .card-desc {
+            font-size: 14px;
+            color: rgba(19, 66, 82, 0.65);
+            margin-bottom: 24px;
+        }
+
+        .icon-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 140px;
+            background: linear-gradient(135deg, rgba(33, 128, 141, 0.05) 0%, rgba(45, 166, 178, 0.05) 100%);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .icon-button {
+            width: 64px;
+            height: 64px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            transition: all var(--duration) cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+
+        .icon-button:hover {
+            transform: scale(1.15);
+        }
+
+        .icon-button:active {
+            transform: scale(0.95);
+        }
+
+        .icon-button svg {
+            width: 100%;
+            height: 100%;
+            transition: all var(--duration) cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .icon-button:hover svg {
+            filter: drop-shadow(0 4px 12px rgba(33, 128, 141, 0.3));
+        }
+
+        /* Convergence Icon */
+        .convergence-icon path,
+        .convergence-icon circle {
+            fill: none;
+            stroke: var(--color-primary);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: stroke var(--duration) cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .icon-button:hover .convergence-icon path,
+        .icon-button:hover .convergence-icon circle {
+            stroke: var(--color-primary-hover);
+        }
+
+        .icon-button:active .convergence-icon path,
+        .icon-button:active .convergence-icon circle {
+            stroke: var(--color-primary-active);
+        }
+
+        /* Divergence Icon */
+        .divergence-icon path,
+        .divergence-icon circle {
+            fill: none;
+            stroke: var(--color-primary);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: stroke var(--duration) cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .icon-button:hover .divergence-icon path,
+        .icon-button:hover .divergence-icon circle {
+            stroke: var(--color-primary-hover);
+        }
+
+        .icon-button:active .divergence-icon path,
+        .icon-button:active .divergence-icon circle {
+            stroke: var(--color-primary-active);
+        }
+
+        .sizes-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .sizes-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(19, 66, 82, 0.6);
+            margin-bottom: 16px;
+        }
+
+        .size-grid {
+            display: flex;
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .size-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .size-label {
+            font-size: 12px;
+            color: rgba(19, 66, 82, 0.6);
+        }
+
+        .size-32 .icon-button {
+            width: 32px;
+            height: 32px;
+        }
+
+        .size-40 .icon-button {
+            width: 40px;
+            height: 40px;
+        }
+
+        .size-48 .icon-button {
+            width: 48px;
+            height: 48px;
+        }
+
+        .states-section {
+            margin-top: 48px;
+            padding: 32px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+        }
+
+        .states-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: var(--color-text);
+        }
+
+        .states-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+        }
+
+        .state-demo {
+            text-align: center;
+        }
+
+        .state-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(19, 66, 82, 0.6);
+            margin-bottom: 12px;
+        }
+
+        .state-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(33, 128, 141, 0.05) 0%, rgba(45, 166, 178, 0.05) 100%);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .state-icon .icon-button {
+            width: 48px;
+            height: 48px;
+        }
+
+        .state-demo.hover .state-icon .icon-button:hover {
+            transform: scale(1.15);
+        }
+
+        .code-section {
+            margin-top: 48px;
+            padding: 24px;
+            background: linear-gradient(135deg, #FCF8F5 0%, #F5F5F5 100%);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+        }
+
+        .code-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--color-text);
+        }
+
+        .code-block {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--color-text);
+            margin-bottom: 12px;
+        }
+
+        .code-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(19, 66, 82, 0.6);
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mindmap Icon Set</h1>
+        <p class="subtitle">Interactive Hover States for Convergence & Divergence</p>
+
+        <div class="grid">
+            <!-- Convergence Card -->
+            <div class="card">
+                <div class="card-title">Convergence</div>
+                <div class="card-desc">Collapse expanded nodes and focus hierarchy</div>
+                
+                <div class="icon-display">
+                    <button class="icon-button" title="Collapse nodes" aria-label="Collapse nodes">
+                        <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Center circle -->
+                            <circle cx="32" cy="32" r="6"/>
+                            
+                            <!-- Top arrow pointing inward -->
+                            <path d="M 32 8 L 32 20"/>
+                            <path d="M 28 16 L 32 20 L 36 16"/>
+                            
+                            <!-- Right arrow pointing inward -->
+                            <path d="M 56 32 L 44 32"/>
+                            <path d="M 48 28 L 44 32 L 48 36"/>
+                            
+                            <!-- Bottom arrow pointing inward -->
+                            <path d="M 32 56 L 32 44"/>
+                            <path d="M 36 48 L 32 44 L 28 48"/>
+                            
+                            <!-- Left arrow pointing inward -->
+                            <path d="M 8 32 L 20 32"/>
+                            <path d="M 16 36 L 20 32 L 16 28"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="sizes-section">
+                    <div class="sizes-title">Size Variations</div>
+                    <div class="size-grid">
+                        <div class="size-item size-32">
+                            <button class="icon-button" title="Collapse" aria-label="Collapse">
+                                <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 8 L 32 20"/><path d="M 28 16 L 32 20 L 36 16"/>
+                                    <path d="M 56 32 L 44 32"/><path d="M 48 28 L 44 32 L 48 36"/>
+                                    <path d="M 32 56 L 32 44"/><path d="M 36 48 L 32 44 L 28 48"/>
+                                    <path d="M 8 32 L 20 32"/><path d="M 16 36 L 20 32 L 16 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">32px</span>
+                        </div>
+                        <div class="size-item size-40">
+                            <button class="icon-button" title="Collapse" aria-label="Collapse">
+                                <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 8 L 32 20"/><path d="M 28 16 L 32 20 L 36 16"/>
+                                    <path d="M 56 32 L 44 32"/><path d="M 48 28 L 44 32 L 48 36"/>
+                                    <path d="M 32 56 L 32 44"/><path d="M 36 48 L 32 44 L 28 48"/>
+                                    <path d="M 8 32 L 20 32"/><path d="M 16 36 L 20 32 L 16 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">40px</span>
+                        </div>
+                        <div class="size-item size-48">
+                            <button class="icon-button" title="Collapse" aria-label="Collapse">
+                                <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 8 L 32 20"/><path d="M 28 16 L 32 20 L 36 16"/>
+                                    <path d="M 56 32 L 44 32"/><path d="M 48 28 L 44 32 L 48 36"/>
+                                    <path d="M 32 56 L 32 44"/><path d="M 36 48 L 32 44 L 28 48"/>
+                                    <path d="M 8 32 L 20 32"/><path d="M 16 36 L 20 32 L 16 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">48px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Divergence Card -->
+            <div class="card">
+                <div class="card-title">Divergence</div>
+                <div class="card-desc">Expand collapsed nodes and explore branches</div>
+                
+                <div class="icon-display">
+                    <button class="icon-button" title="Expand nodes" aria-label="Expand nodes">
+                        <svg class="divergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Center circle -->
+                            <circle cx="32" cy="32" r="6"/>
+                            
+                            <!-- Top arrow pointing outward -->
+                            <path d="M 32 20 L 32 8"/>
+                            <path d="M 28 12 L 32 8 L 36 12"/>
+                            
+                            <!-- Right arrow pointing outward -->
+                            <path d="M 44 32 L 56 32"/>
+                            <path d="M 52 28 L 56 32 L 52 36"/>
+                            
+                            <!-- Bottom arrow pointing outward -->
+                            <path d="M 32 44 L 32 56"/>
+                            <path d="M 36 52 L 32 56 L 28 52"/>
+                            
+                            <!-- Left arrow pointing outward -->
+                            <path d="M 20 32 L 8 32"/>
+                            <path d="M 12 36 L 8 32 L 12 28"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="sizes-section">
+                    <div class="sizes-title">Size Variations</div>
+                    <div class="size-grid">
+                        <div class="size-item size-32">
+                            <button class="icon-button" title="Expand" aria-label="Expand">
+                                <svg class="divergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 20 L 32 8"/><path d="M 28 12 L 32 8 L 36 12"/>
+                                    <path d="M 44 32 L 56 32"/><path d="M 52 28 L 56 32 L 52 36"/>
+                                    <path d="M 32 44 L 32 56"/><path d="M 36 52 L 32 56 L 28 52"/>
+                                    <path d="M 20 32 L 8 32"/><path d="M 12 36 L 8 32 L 12 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">32px</span>
+                        </div>
+                        <div class="size-item size-40">
+                            <button class="icon-button" title="Expand" aria-label="Expand">
+                                <svg class="divergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 20 L 32 8"/><path d="M 28 12 L 32 8 L 36 12"/>
+                                    <path d="M 44 32 L 56 32"/><path d="M 52 28 L 56 32 L 52 36"/>
+                                    <path d="M 32 44 L 32 56"/><path d="M 36 52 L 32 56 L 28 52"/>
+                                    <path d="M 20 32 L 8 32"/><path d="M 12 36 L 8 32 L 12 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">40px</span>
+                        </div>
+                        <div class="size-item size-48">
+                            <button class="icon-button" title="Expand" aria-label="Expand">
+                                <svg class="divergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="32" cy="32" r="6"/>
+                                    <path d="M 32 20 L 32 8"/><path d="M 28 12 L 32 8 L 36 12"/>
+                                    <path d="M 44 32 L 56 32"/><path d="M 52 28 L 56 32 L 52 36"/>
+                                    <path d="M 32 44 L 32 56"/><path d="M 36 52 L 32 56 L 28 52"/>
+                                    <path d="M 20 32 L 8 32"/><path d="M 12 36 L 8 32 L 12 28"/>
+                                </svg>
+                            </button>
+                            <span class="size-label">48px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hover States Section -->
+        <div class="states-section">
+            <div class="states-title">Interactive Hover States</div>
+            <div class="states-grid">
+                <div class="state-demo">
+                    <div class="state-label">Default State</div>
+                    <div class="state-icon">
+                        <button class="icon-button" title="Collapse" aria-label="Collapse">
+                            <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="32" cy="32" r="6"/>
+                                <path d="M 32 8 L 32 20"/><path d="M 28 16 L 32 20 L 36 16"/>
+                                <path d="M 56 32 L 44 32"/><path d="M 48 28 L 44 32 L 48 36"/>
+                                <path d="M 32 56 L 32 44"/><path d="M 36 48 L 32 44 L 28 48"/>
+                                <path d="M 8 32 L 20 32"/><path d="M 16 36 L 20 32 L 16 28"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p style="font-size: 12px; color: rgba(19, 66, 82, 0.65);">No interaction</p>
+                </div>
+
+                <div class="state-demo hover">
+                    <div class="state-label">Hover State</div>
+                    <div class="state-icon">
+                        <button class="icon-button" title="Collapse" aria-label="Collapse">
+                            <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="32" cy="32" r="6"/>
+                                <path d="M 32 8 L 32 20"/><path d="M 28 16 L 32 20 L 36 16"/>
+                                <path d="M 56 32 L 44 32"/><path d="M 48 28 L 44 32 L 48 36"/>
+                                <path d="M 32 56 L 32 44"/><path d="M 36 48 L 32 44 L 28 48"/>
+                                <path d="M 8 32 L 20 32"/><path d="M 16 36 L 20 32 L 16 28"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p style="font-size: 12px; color: rgba(19, 66, 82, 0.65);">Scale 1.15x + Color shift</p>
+                </div>
+
+                <div class="state-demo">
+                    <div class="state-label">Active State</div>
+                    <div class="state-icon">
+                        <button class="icon-button" style="transform: scale(0.95);" title="Collapse" aria-label="Collapse">
+                            <svg class="convergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="32" cy="32" r="6" style="stroke: #1A6C73;"/>
+                                <path d="M 32 8 L 32 20" style="stroke: #1A6C73;"/><path d="M 28 16 L 32 20 L 36 16" style="stroke: #1A6C73;"/>
+                                <path d="M 56 32 L 44 32" style="stroke: #1A6C73;"/><path d="M 48 28 L 44 32 L 48 36" style="stroke: #1A6C73;"/>
+                                <path d="M 32 56 L 32 44" style="stroke: #1A6C73;"/><path d="M 36 48 L 32 44 L 28 48" style="stroke: #1A6C73;"/>
+                                <path d="M 8 32 L 20 32" style="stroke: #1A6C73;"/><path d="M 16 36 L 20 32 L 16 28" style="stroke: #1A6C73;"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p style="font-size: 12px; color: rgba(19, 66, 82, 0.65);">Scale 0.95x + Darker color</p>
+                </div>
+
+                <div class="state-demo">
+                    <div class="state-label">Expand Icon</div>
+                    <div class="state-icon">
+                        <button class="icon-button" title="Expand" aria-label="Expand">
+                            <svg class="divergence-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="32" cy="32" r="6"/>
+                                <path d="M 32 20 L 32 8"/><path d="M 28 12 L 32 8 L 36 12"/>
+                                <path d="M 44 32 L 56 32"/><path d="M 52 28 L 56 32 L 52 36"/>
+                                <path d="M 32 44 L 32 56"/><path d="M 36 52 L 32 56 L 28 52"/>
+                                <path d="M 20 32 L 8 32"/><path d="M 12 36 L 8 32 L 12 28"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p style="font-size: 12px; color: rgba(19, 66, 82, 0.65);">Divergence variation</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Section -->
+        <div class="code-section">
+            <div class="code-title">Usage & Integration</div>
+            
+            <div style="margin-bottom: 24px;">
+                <div class="code-label">SVG Markup (Convergence)</div>
+                <div class="code-block"><pre>&lt;button class="icon-button"&gt;
+  &lt;svg class="convergence-icon" viewBox="0 0 64 64"&gt;
+    &lt;circle cx="32" cy="32" r="6"/&gt;
+    &lt;path d="M 32 8 L 32 20"/&gt;
+    &lt;path d="M 28 16 L 32 20 L 36 16"/&gt;
+    &lt;!-- Top, Right, Bottom, Left arrows --&gt;
+  &lt;/svg&gt;
+&lt;/button&gt;</pre></div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <div class="code-label">CSS Animations</div>
+                <div class="code-block"><pre>.icon-button {
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.icon-button:hover {
+  transform: scale(1.15);
+}
+.icon-button:active {
+  transform: scale(0.95);
+}</pre></div>
+            </div>
+
+            <div>
+                <div class="code-label">Key Features</div>
+                <ul style="list-style: none; padding: 0; font-size: 14px; color: rgba(19, 66, 82, 0.8); line-height: 1.8;">
+                    <li>✓ Smooth cubic-bezier easing (0.16, 1, 0.3, 1)</li>
+                    <li>✓ 200ms transition duration for responsive feel</li>
+                    <li>✓ Accessible SVG icons with proper stroke attributes</li>
+                    <li>✓ Color shift on hover (teal primary to brighter hover)</li>
+                    <li>✓ Scale animations for visual feedback</li>
+                    <li>✓ Works at multiple sizes (32px, 40px, 48px)</li>
+                    <li>✓ Drop shadow effect on hover for depth</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

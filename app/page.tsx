@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
+import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
 import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   createNewChatRequest,
   createDirectedQueryRequest,
+  createFollowUpRequest,
   getGraph,
   buildGraphNodesFromResponse,
   type CompleteEvent,
@@ -19,62 +21,72 @@ export default function Home() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [rootNodeId, setRootNodeId] = useState<string | null>(null);
-  
+
   // Graph state
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [responses, setResponses] = useState<CompleteEvent[]>([]);
   const responsesRef = useRef<CompleteEvent[]>([]);
-  
+
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
 
+  // Chat sidebar state (full conversation)
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  // Get all conversation nodes for full sidebar (nodes with payloads, in order)
+  const conversationNodes = useMemo(() => {
+    return graphNodes
+      .filter(n => n.payload && n.payload.length > 0)
+      .map(n => ({
+        id: n.id,
+        label: n.label,
+        payload: n.payload || [],
+      }));
+  }, [graphNodes]);
+
   // Handle sending a message from the landing page (always creates a new chat)
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
     setIsCreatingChat(true);
     setStatusMessage("Connecting...");
+    setIsStreaming(true);
 
     try {
-      // Landing page always creates a new chat
       const request = createNewChatRequest(message);
 
-      // Send message with SSE streaming
       await sendMessage(
         request,
-        // onUpdate callback
         (update) => {
           setStatusMessage(update.message);
         },
-        // onComplete callback
         (event) => {
-          // Update chat state
           setCurrentChatId(event.chat_id);
           setCurrentNodeId(event.node_id);
-          
-          // Set root node if this is first response
+
           if (!rootNodeId) {
             setRootNodeId(event.node_id);
           }
-          
-          // Add to responses and rebuild graph using ref for latest value
+
           const newResponses = [...responsesRef.current, event];
           responsesRef.current = newResponses;
           setResponses(newResponses);
           setGraphNodes(buildGraphFromResponses(newResponses));
-          
+
+          setIsStreaming(false);
           setStatusMessage("");
           setIsLoading(false);
           setIsCreatingChat(false);
         },
-        // onError callback
         (error) => {
           console.error("Message error:", error);
           setStatusMessage(`Error: ${error.error}`);
           setIsLoading(false);
           setIsCreatingChat(false);
+          setIsStreaming(false);
         }
       );
     } catch (error) {
@@ -82,29 +94,69 @@ export default function Home() {
       setStatusMessage("Failed to send message");
       setIsLoading(false);
       setIsCreatingChat(false);
+      setIsStreaming(false);
     }
   }, [rootNodeId]);
 
-  // Handle selecting a chat from sidebar
+  // Handle follow-up message from the full conversation sidebar
+  const handleSidebarMessage = useCallback(async (message: string) => {
+    if (!currentChatId || !currentNodeId || isStreaming) return;
+
+    setIsStreaming(true);
+    setStatusMessage("Connecting...");
+
+    try {
+      const request = createFollowUpRequest(message, currentChatId, currentNodeId);
+
+      await sendMessage(
+        request,
+        (update) => {
+          setStatusMessage(update.message);
+        },
+        (event) => {
+          setCurrentNodeId(event.node_id);
+
+          getGraph(event.chat_id)
+            .then((graphResponse) => {
+              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              setGraphNodes(nodes);
+            })
+            .catch(console.error);
+
+          setIsStreaming(false);
+          setStatusMessage("");
+        },
+        (error) => {
+          console.error("Follow-up error:", error);
+          setStatusMessage(`Error: ${error.error}`);
+          setIsStreaming(false);
+        }
+      );
+    } catch (error) {
+      console.error("Failed to send follow-up:", error);
+      setStatusMessage("Failed to send message");
+      setIsStreaming(false);
+    }
+  }, [currentChatId, currentNodeId, isStreaming]);
+
+  // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
     setIsLoading(true);
     setStatusMessage("Loading conversation...");
     setCurrentChatId(chatId);
-    
+
     try {
-      // Fetch the graph for this chat
       const graphResponse = await getGraph(chatId);
-      const { nodes, currentNodeId, rootNodeId: root } = buildGraphNodesFromResponse(graphResponse);
-      
+      const { nodes, currentNodeId: nodeId, rootNodeId: root } = buildGraphNodesFromResponse(graphResponse);
+
       setGraphNodes(nodes);
-      setCurrentNodeId(currentNodeId);
+      setCurrentNodeId(nodeId);
       setRootNodeId(root);
-      setResponses([]); // Clear responses since we loaded from graph
+      setResponses([]);
       setStatusMessage("");
     } catch (error) {
       console.error("Failed to load chat graph:", error);
       setStatusMessage("Failed to load conversation");
-      // Reset state on error
       setGraphNodes([]);
       setCurrentNodeId(null);
       setRootNodeId(null);
@@ -125,121 +177,127 @@ export default function Home() {
     setIsLoading(false);
     setIsCreatingChat(false);
     setLoadingNodeId(null);
+    setIsChatSidebarOpen(false);
+    setIsStreaming(false);
   }, []);
 
   // Handle starting a new chat
   const handleNewChat = useCallback(() => {
-    handleLogoClick(); // Same behavior - go to landing
+    handleLogoClick();
   }, [handleLogoClick]);
 
   // Handle clicking a direction node to explore
   const handleDirectionClick = useCallback(async (nodeId: string) => {
-    console.log("handleDirectionClick called with nodeId:", nodeId);
-    console.log("currentChatId:", currentChatId, "loadingNodeId:", loadingNodeId);
-    
-    if (!currentChatId || loadingNodeId) {
-      console.log("Early return - missing chatId or already loading");
-      return;
-    }
-    
-    console.log("Setting loadingNodeId to:", nodeId);
+    if (!currentChatId || loadingNodeId) return;
+
     setLoadingNodeId(nodeId);
-    
+    setIsStreaming(true);
+    setStatusMessage("Exploring...");
+
     try {
       const request = createDirectedQueryRequest(currentChatId, nodeId);
-      console.log("Sending request:", request);
-      
+
       await sendMessage(
         request,
-        // onUpdate callback
         (update) => {
-          console.log("SSE Update received:", update);
           setStatusMessage(update.message);
         },
-        // onComplete callback - NOT async, use .then() chain instead
         (event) => {
-          console.log("Direction query complete:", event);
-          
-          // Update current node
           setCurrentNodeId(event.node_id);
-          
-          // Use chat_id from event (more reliable than closure)
-          const chatId = event.chat_id;
-          
-          // Re-fetch the complete graph from API to ensure we have all nodes
-          getGraph(chatId)
+
+          getGraph(event.chat_id)
             .then((graphResponse) => {
-              console.log("Graph fetched successfully:", graphResponse);
               const { nodes } = buildGraphNodesFromResponse(graphResponse);
               setGraphNodes(nodes);
             })
             .catch((fetchError) => {
               console.error("Failed to refresh graph:", fetchError);
-              // Fallback: add to responses and rebuild (works if we have response history)
               const newResponses = [...responsesRef.current, event];
               responsesRef.current = newResponses;
               setResponses(newResponses);
               setGraphNodes(buildGraphFromResponses(newResponses));
             })
             .finally(() => {
-              console.log("Clearing loading state");
               setStatusMessage("");
               setLoadingNodeId(null);
             });
+
+          setIsStreaming(false);
         },
-        // onError callback
         (error) => {
           console.error("Direction query error:", error);
           setStatusMessage(`Error: ${error.error}`);
           setLoadingNodeId(null);
+          setIsStreaming(false);
         }
       );
     } catch (error) {
       console.error("Failed to explore direction:", error);
       setStatusMessage("Failed to explore direction");
       setLoadingNodeId(null);
+      setIsStreaming(false);
     }
   }, [currentChatId, loadingNodeId]);
 
-  // Handle clicking a node in the graph
+  // Handle clicking a node in the graph (panel is handled internally by KnowledgeGraph)
   const handleNodeClick = useCallback((nodeId: string) => {
     setCurrentNodeId(nodeId);
   }, []);
 
-  // Determine what to show: landing, loading, or graph view
+  // Toggle full conversation sidebar
+  const toggleChatSidebar = useCallback(() => {
+    setIsChatSidebarOpen(prev => !prev);
+  }, []);
+
+  // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
   const showLoadingPage = isCreatingChat;
   const showGraphPage = currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
-      <Sidebar 
+      {/* Left Sidebar - Chat History */}
+      <Sidebar
         selectedChatId={currentChatId}
         onChatSelect={handleChatSelect}
         onNewChat={handleNewChat}
         onLogoClick={handleLogoClick}
       />
-      
-      <main className="flex-1 flex flex-col h-full relative">
-        <div className="flex-1 h-full overflow-hidden">
+
+      {/* Main Content Area - flexes to accommodate right sidebar */}
+      <main className="flex-1 flex h-full relative overflow-hidden">
+        {/* Graph/Content Area */}
+        <div className="flex-1 h-full overflow-hidden relative">
           {showLoadingPage ? (
             <GraphLoading />
           ) : showGraphPage ? (
-            <KnowledgeGraph 
+            <KnowledgeGraph
               nodes={graphNodes}
               rootNodeId={rootNodeId || undefined}
               onNodeClick={handleNodeClick}
               onDirectionClick={handleDirectionClick}
               loadingNodeId={loadingNodeId}
+              onToggleChatSidebar={toggleChatSidebar}
+              isChatSidebarOpen={isChatSidebarOpen}
             />
           ) : (
-            <ChatInterface 
+            <ChatInterface
               onSendMessage={handleSendMessage}
               isLoading={isLoading}
               statusMessage={statusMessage}
             />
           )}
         </div>
+
+        {/* Right Sidebar - Full Conversation (push style) */}
+        <ChatSidebar
+          isOpen={isChatSidebarOpen}
+          conversationNodes={conversationNodes}
+          isStreaming={isStreaming}
+          statusMessage={statusMessage}
+          onSendMessage={handleSidebarMessage}
+          onClose={() => setIsChatSidebarOpen(false)}
+        />
       </main>
     </div>
   );

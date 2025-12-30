@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { MessageSquare, User, Plus } from 'lucide-react';
+import { MessageSquare, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getChats, formatRelativeTime, type Chat } from '@/lib/api';
+import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   selectedChatId?: string | null;
@@ -14,16 +15,17 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onLogoClick?: () => void;
 }
 
-export function Sidebar({ 
-  className, 
+export function Sidebar({
+  className,
   selectedChatId,
   onChatSelect,
   onNewChat,
   onLogoClick,
-  ...props 
+  ...props
 }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const fetchChats = async () => {
     try {
@@ -50,14 +52,14 @@ export function Sidebar({
   return (
     <div className={cn("w-64 border-r border-slate-200 bg-slate-50/40 h-screen flex flex-col", className)} {...props}>
       {/* Logo - clickable to go home */}
-      <div 
+      <div
         className="px-6 py-6 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
         onClick={onLogoClick}
       >
         <Image src="/logo.svg" alt="Trevi Logo" width={32} height={32} className="dark:invert" />
         <span className="text-xl font-bold tracking-tight text-slate-900">trevi</span>
       </div>
-      
+
       <div className="px-6 mb-4">
         <p className="text-sm text-slate-500 mb-4">
           explore your <span className="text-blue-500 font-semibold">curiosity.</span>
@@ -101,17 +103,12 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-slate-200">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white">
-            <User className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-800">ByeWind</span>
-            <span className="text-xs text-slate-500">Free Plan</span>
-          </div>
-        </div>
+      <div className="px-4 py-4 border-t border-slate-200">
+        <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
       </div>
+
+      {/* Feedback Modal */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 }
