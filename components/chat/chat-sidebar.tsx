@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Send, Loader2, MessageSquare, Route, BookOpen } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
-import type { MessagePayload } from '@/lib/api';
+import type { MessagePayload, Citation } from '@/lib/api';
 
 interface ConversationNode {
     id: string;
     label: string;
     payload: MessagePayload[];
+    citations?: Citation[];
 }
 
 type TabType = 'full' | 'thread' | 'bibliography';
@@ -23,6 +24,11 @@ interface ChatSidebarProps {
     statusMessage: string;
     onSendMessage: (message: string) => void;
     onClose: () => void;
+}
+
+interface MessageWithCitations {
+    message: MessagePayload;
+    citations?: Citation[];
 }
 
 /**
@@ -45,25 +51,35 @@ export function ChatSidebar({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Flatten all messages from all nodes into a single conversation
-    const allMessages = useMemo(() => {
-        return conversationNodes.flatMap(node => node.payload || []);
+    // Flatten all messages from all nodes into a single conversation with citations
+    const allMessagesWithCitations = useMemo(() => {
+        return conversationNodes.flatMap(node =>
+            (node.payload || []).map(msg => ({
+                message: msg,
+                citations: node.citations
+            }))
+        );
     }, [conversationNodes]);
 
-    // Flatten thread messages (root to active)
-    const threadMessages = useMemo(() => {
-        return threadNodes.flatMap(node => node.payload || []);
+    // Flatten thread messages (root to active) with citations
+    const threadMessagesWithCitations = useMemo(() => {
+        return threadNodes.flatMap(node =>
+            (node.payload || []).map(msg => ({
+                message: msg,
+                citations: node.citations
+            }))
+        );
     }, [threadNodes]);
 
     // Get current messages based on active tab
-    const currentMessages = useMemo(() => {
-        return activeTab === 'thread' ? threadMessages : allMessages;
-    }, [activeTab, allMessages, threadMessages]);
+    const currentMessagesWithCitations = useMemo(() => {
+        return activeTab === 'thread' ? threadMessagesWithCitations : allMessagesWithCitations;
+    }, [activeTab, allMessagesWithCitations, threadMessagesWithCitations]);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [currentMessages]);
+    }, [currentMessagesWithCitations]);
 
     // Focus input when sidebar opens
     useEffect(() => {
@@ -93,7 +109,7 @@ export function ChatSidebar({
     useEffect(() => {
         // Both tabs start from top
         messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [activeTab, currentMessages]);
+    }, [activeTab, currentMessagesWithCitations]);
 
     // Determine title based on active tab
     const currentTitle = activeTab === 'thread' && activeLabel ? activeLabel : rootLabel;
@@ -153,17 +169,18 @@ export function ChatSidebar({
                         <p>Bibliography coming soon</p>
                         <p className="text-xs mt-1">Sources will appear here</p>
                     </div>
-                ) : currentMessages.length === 0 && !isStreaming ? (
+                ) : currentMessagesWithCitations.length === 0 && !isStreaming ? (
                     <div className="flex items-center justify-center h-full text-slate-400 text-sm">
                         {activeTab === 'thread' ? 'Select a node to see its thread' : 'No conversation yet. Start exploring!'}
                     </div>
                 ) : (
                     <>
-                        {currentMessages.map((msg, index) => (
+                        {currentMessagesWithCitations.map((item, index) => (
                             <MessageBubble
                                 key={index}
-                                role={msg.role}
-                                content={msg.content}
+                                role={item.message.role}
+                                content={item.message.content}
+                                citations={item.citations}
                             />
                         ))}
 

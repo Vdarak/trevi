@@ -45,6 +45,7 @@ export default function Home() {
         id: n.id,
         label: n.label,
         payload: n.payload || [],
+        citations: n.citations,
       }));
   }, [graphNodes]);
 
@@ -74,6 +75,7 @@ export default function Home() {
         id: n.id,
         label: n.label,
         payload: n.payload || [],
+        citations: n.citations,
       }));
   }, [graphNodes, currentNodeId, rootNodeId]);
 

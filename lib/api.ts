@@ -187,11 +187,11 @@ export async function getGraph(chatId: string): Promise<GraphResponse> {
  * Converts GraphResponse into GraphNode array for the KnowledgeGraph component.
  */
 export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
-  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[] }>;
+  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }>;
   currentNodeId: string;
   rootNodeId: string | null;
 } {
-  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[] }> = [];
+  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }> = [];
   let rootNodeId: string | null = null;
 
   // Build a map of node ID to parent ID from edges
@@ -216,6 +216,7 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
       parentId: parentId === "root" ? null : parentId,
       isDirection: nodeData.type === "direction",
       payload: nodeData.payload,
+      citations: nodeData.citations,
     });
 
     // Find root node (parent is "root" or no parent)
@@ -230,6 +231,7 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
     rootNodeId,
   };
 }
+
 
 // ============================================================================
 // Messages API - Modular Request Builders

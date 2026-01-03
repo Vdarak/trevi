@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -17,7 +17,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass } from 'lucide-react';
-import { CompleteEvent, MessagePayload } from '@/lib/api';
+import { CompleteEvent, MessagePayload, Citation } from '@/lib/api';
 import { hierarchy, tree } from 'd3-hierarchy';
 import { NodeConversationPanel } from '@/components/chat/node-conversation-panel';
 
@@ -32,6 +32,7 @@ export interface GraphNode {
   parentId: string | null;
   isDirection?: boolean; // True if this is a direction node (clickable to explore)
   payload?: Array<{ role: 'user' | 'assistant'; content: string }>; // Message history for this node
+  citations?: Citation[]; // Citation data with snippets for this node
 }
 
 export interface KnowledgeGraphProps {
@@ -431,8 +432,50 @@ function ExploreIcon({ className = "" }: { className?: string }) {
   return <Compass className={`w-full h-full ${className}`} strokeWidth={2} />;
 }
 
+// Helper function to find snippet for a citation
+function findSnippetForCitation(citationIndex: number, citations?: Citation[]): string | null {
+  if (!citations) return null;
+
+  // Find the citation with matching index
+  const citation = citations.find(c => c.index === citationIndex);
+  if (!citation || !citation.occurrences || citation.occurrences.length === 0) {
+    return null;
+  }
+
+  // Return the snippet from the first occurrence
+  const snippet = citation.occurrences[0].snippet;
+  return snippet && snippet !== "Source paragraph not found" ? snippet : null;
+}
+
+// Citation tooltip component - simple CSS-based approach
+function CitationTooltipGraph({
+  index,
+  content
+}: {
+  index: string;
+  content: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline relative group cursor-pointer">
+      <sup className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors leading-none">
+        {index}
+      </sup>
+      {/* Tooltip - CSS only with group-hover */}
+      <span
+        className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 max-h-32 overflow-y-auto px-2.5 py-2 text-[10px] bg-slate-800 text-white rounded-lg shadow-xl whitespace-normal leading-relaxed"
+        style={{ zIndex: 99999 }}
+      >
+        {content}
+      </span>
+    </span>
+  );
+}
+
+
+
+
 // Simple markdown renderer for conversation messages with citation support
-function renderSimpleMarkdown(text: string): React.ReactNode {
+function renderSimpleMarkdown(text: string, citationsData?: Citation[]): React.ReactNode {
   // FIRST: Protect markdown links by replacing them with placeholders
   const links: { text: string; url: string }[] = [];
   let processedText = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
@@ -441,10 +484,10 @@ function renderSimpleMarkdown(text: string): React.ReactNode {
   });
 
   // SECOND: Extract citations [index: title] - must have colon
-  const citations: { index: string; title: string }[] = [];
+  const extractedCitations: { index: string; title: string }[] = [];
   processedText = processedText.replace(/\[(\d+):\s*([^\]]+)\]/g, (match, index, title) => {
-    citations.push({ index, title: title.trim() });
-    return `__CITATION_${citations.length - 1}__`;
+    extractedCitations.push({ index, title: title.trim() });
+    return `__CITATION_${extractedCitations.length - 1}__`;
   });
 
   // THIRD: Handle standalone reference numbers [n]
@@ -473,7 +516,7 @@ function renderSimpleMarkdown(text: string): React.ReactNode {
   }
 
   // If no citations, use simple HTML rendering
-  if (citations.length === 0) {
+  if (extractedCitations.length === 0) {
     return <span dangerouslySetInnerHTML={{ __html: processedText }} />;
   }
 
@@ -489,23 +532,19 @@ function renderSimpleMarkdown(text: string): React.ReactNode {
       }
     } else {
       // Citation index
-      const citationIndex = parseInt(parts[i], 10);
-      const citation = citations[citationIndex];
+      const citationArrayIndex = parseInt(parts[i], 10);
+      const citation = extractedCitations[citationArrayIndex];
       if (citation) {
+        const citationNumber = parseInt(citation.index, 10);
+        const snippet = findSnippetForCitation(citationNumber, citationsData);
+        const tooltipContent = snippet || citation.title;
+
         elements.push(
-          <span
+          <CitationTooltipGraph
             key={`cite-${i}`}
-            className="inline relative group cursor-pointer align-baseline"
-            title={citation.title}
-          >
-            <sup className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors">
-              {citation.index}
-            </sup>
-            {/* Tooltip on hover */}
-            <span className="absolute left-0 bottom-full mb-1 z-50 hidden group-hover:block w-max max-w-[200px] px-2 py-1 text-[10px] bg-slate-800 text-white rounded shadow-lg pointer-events-none whitespace-normal">
-              {citation.title}
-            </span>
-          </span>
+            index={citation.index}
+            content={tooltipContent}
+          />
         );
       }
     }
@@ -692,6 +731,7 @@ interface ConversationPanelNodeData {
   messages: MessagePayload[];
   label: string;
   onClose: () => void;
+  citations?: Citation[];
 }
 
 function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
@@ -743,7 +783,7 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
                 }`}
             >
               <div className="text-xs leading-relaxed break-words whitespace-pre-wrap">
-                {renderSimpleMarkdown(msg.content)}
+                {renderSimpleMarkdown(msg.content, data.citations)}
               </div>
             </div>
           </div>
@@ -1358,6 +1398,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           data: {
             messages: graphNode.payload,
             label: graphNode.label,
+            citations: graphNode.citations,
             onClose: () => {
               // Keep activeNodeId - path highlighting should persist for context
               // Only remove the panel node and edge

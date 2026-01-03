@@ -265,6 +265,30 @@ onClose: () => {
 
 ---
 
+### Phase 9: UI & UX Polish - Citations, Graph Interaction, and Visuals
+
+**Advanced Citation System**
+- **Robust Parsing:** Implemented regex-based parsing to handle both standard markdown links (`[text](url)`) and custom citation formats (`[1: Title]`).
+- **Interactive Badges:** Citations render as inline, superscript blue badges.
+- **Hover Tooltips:** Citations display full source titles on hover, positioned intelligently above the badge.
+- **Styling Refinements:**
+  - AI messages updated to be full-width, borderless, and use smaller typography (`text-xs`) for better information density.
+  - Links in "References" sections preserved as clickable anchors.
+
+**Graph Interaction Enhancements**
+- **Persistent Path Highlighting:** Active node path to root remains highlighted even after closing the conversation panel, maintaining context.
+- **Auto-Fit View:** Intelligent logic triggers `fitView` when loading completes or new nodes are added, ensuring the user always sees the relevant content.
+- **Cursor Feedback:** Overrode default React Flow cursors to use `pointer` for handles and nodes, and added pointer cursor to expand/collapse chevrons for better affordance.
+- **Visual Consistency:**
+  - Panel node handles matched to standard node style (solid circle).
+  - Conversation panel scrollbar styled to be thin and unobtrusive but visible.
+  - Sticky header added to conversation panel showing current topic.
+
+**Sidebar Experience**
+- **Loading Indicators:** Added immediate visual feedback ("New Chat..." with spinner) in the sidebar list when initiating a new conversation.
+
+---
+
 ## Technical Architecture
 
 ### File Structure Impact
