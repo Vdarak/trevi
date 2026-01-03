@@ -265,27 +265,30 @@ onClose: () => {
 
 ---
 
-### Phase 9: UI & UX Polish - Citations, Graph Interaction, and Visuals
+### Phase 9: Intelligent Citation System & Data Flow Infrastructure
 
 **Advanced Citation System**
-- **Robust Parsing:** Implemented regex-based parsing to handle both standard markdown links (`[text](url)`) and custom citation formats (`[1: Title]`).
-- **Interactive Badges:** Citations render as inline, superscript blue badges.
-- **Hover Tooltips:** Citations display full source titles on hover, positioned intelligently above the badge.
-- **Styling Refinements:**
-  - AI messages updated to be full-width, borderless, and use smaller typography (`text-xs`) for better information density.
-  - Links in "References" sections preserved as clickable anchors.
+- **Snippet-Based Tooltips:** Revamped citation hover behavior to display contextually relevant `snippet` data from the API response instead of just the source title.
+- **Dynamic Viewport Positioning:** Implemented `CitationTooltip` and `CitationTooltipGraph` components with intelligent positioning logic:
+  - Detects available viewport space (top, bottom, left, right).
+  - Automatically flips or aligns tooltips to prevent edge clipping (e.g., in the node conversation panel).
+  - Utilizes synchronous layout effects (`useLayoutEffect`) to calculate positions before paint, ensuring flicker-free interactions.
+- **Visual Consistency:**
+  - Standardized inline superscript blue badges for citations.
+  - Applied elevated z-index (99999) and fixed positioning to ensure tooltips appear above all UI layers, including the graph canvas.
+
+**Data Flow Infrastructure**
+- **End-to-End Propagation:** Extended the data pipeline to carry citation data from the backend to the UI layer:
+  - `lib/api.ts`: Updated `buildGraphNodesFromResponse` to include citations in the processed node objects.
+  - `GraphNode` Interface: Added `citations` field to the core graph data structure.
+  - `page.tsx`: Ensured the main orchestration layer passes citation data to the sidebar and graph components.
+- **Message Layer integration:** Updated the `MessageBubble` component and graph markdown renderer to accept and resolve citations against local message context.
 
 **Graph Interaction Enhancements**
-- **Persistent Path Highlighting:** Active node path to root remains highlighted even after closing the conversation panel, maintaining context.
-- **Auto-Fit View:** Intelligent logic triggers `fitView` when loading completes or new nodes are added, ensuring the user always sees the relevant content.
-- **Cursor Feedback:** Overrode default React Flow cursors to use `pointer` for handles and nodes, and added pointer cursor to expand/collapse chevrons for better affordance.
-- **Visual Consistency:**
-  - Panel node handles matched to standard node style (solid circle).
-  - Conversation panel scrollbar styled to be thin and unobtrusive but visible.
-  - Sticky header added to conversation panel showing current topic.
+- **Persistent Context:** Active node path to root remains highlighted even after closing the conversation panel.
+- **Intelligent Auto-Fit:** `fitView` logic now account for node sprouting and streaming completion to keep the workspace centered.
+- **Affordance Overrides:** Custom cursors for nodes and handles (`pointer`) to match interactive expectations.
 
-**Sidebar Experience**
-- **Loading Indicators:** Added immediate visual feedback ("New Chat..." with spinner) in the sidebar list when initiating a new conversation.
 
 ---
 
