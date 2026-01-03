@@ -292,6 +292,27 @@ onClose: () => {
 
 ---
 
+### Phase 10: Pilot Testing & Research Strategy
+
+**Strategy for Unmoderated Usability Testing**
+- **Core Pillars:** Stemming thinking from Jobs-To-Be-Done (JTBD), the Double Diamond model, and Learning Science principles.
+- **Key Metrics:**
+    - *Quantitative:* Session duration, exploration depth, branch exploration rate.
+    - *Learning-Specific:* Node revisit rate, citation click-through rate, research goal completion.
+    - *Usability:* System Usability Scale (SUS), Single Ease Question (SEQ).
+
+**Planned Research Tracks:**
+1. **Unmoderated Usability Studies:** 8-12 participants performing scenario-based tasks (e.g., "Explore 3 directions", "Verify a claim via citations").
+2. **In-App Feedback Loop:** Implementing thumbs up/down on messages and direction nodes to capture immediate utility feedback.
+3. **Telemetry & Event Logging:** Tracking behavioral signals like dwell time, navigation paths, and layout preference toggles.
+
+**Priorities for Pilot:**
+- Validating the core "Explore Direction" loop.
+- Measuring trust and credibility through citation interaction.
+- Assessing navigation clarity in increasingly complex graphs.
+
+---
+
 ## Technical Architecture
 
 ### File Structure Impact

@@ -1447,74 +1447,9 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   return (
     <div ref={containerRef} className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
-      {/* Unified Horizontal Toolbar - Top Right */}
-      <div className="absolute top-4 right-4 z-50 bg-white rounded-lg shadow-md border border-slate-200 p-1 flex gap-1 items-center">
-        {/* Zoom Controls */}
-        <button
-          onClick={() => zoomIn({ duration: 200 })}
-          className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
-          title="Zoom In"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => zoomOut({ duration: 200 })}
-          className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
-          title="Zoom Out"
-        >
-          <Minus className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => fitView({ padding: 0.3, duration: 300 })}
-          className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
-          title="Fit to Screen"
-        >
-          <Maximize2 className="w-5 h-5" />
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-slate-200 mx-1" />
-
-        {/* Layout Mode */}
-        <button
-          onClick={() => setLayoutMode('custom')}
-          className={`p-2 rounded ${layoutMode === 'custom' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          title="Spacious Layout"
-        >
-          <GitBranch className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setLayoutMode('tidy')}
-          className={`p-2 rounded ${layoutMode === 'tidy' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          title="Compact Layout"
-        >
-          <Layers className="w-5 h-5" />
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-slate-200 mx-1" />
-
-        {/* Direction */}
-        <button
-          onClick={() => setDirection('TB')}
-          className={`p-2 rounded ${direction === 'TB' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          title="Top to Bottom"
-        >
-          <ArrowDown className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setDirection('LR')}
-          className={`p-2 rounded ${direction === 'LR' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          title="Left to Right"
-        >
-          <ArrowRight className="w-5 h-5" />
-        </button>
-
-        {/* Divider */}
-        {onToggleChatSidebar && <div className="w-px h-6 bg-slate-200 mx-1" />}
-
-        {/* Chat Toggle - Rightmost */}
-        {onToggleChatSidebar && (
+      {/* Chat Toggle Button - Top Right */}
+      {onToggleChatSidebar && (
+        <div className="absolute top-4 right-4 z-50 bg-white rounded-lg shadow-md border border-slate-200 p-1">
           <button
             onClick={onToggleChatSidebar}
             className={`p-2 rounded ${isChatSidebarOpen ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
@@ -1522,7 +1457,71 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           >
             <MessageSquare className="w-5 h-5" />
           </button>
-        )}
+        </div>
+      )}
+
+      {/* Control Buttons - Bottom Left - Vertically Stacked Groups */}
+      <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-2">
+        {/* Layout Mode Group */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+          <button
+            onClick={() => setLayoutMode('custom')}
+            className={`p-2 rounded ${layoutMode === 'custom' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Spacious Layout"
+          >
+            <GitBranch className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setLayoutMode('tidy')}
+            className={`p-2 rounded ${layoutMode === 'tidy' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Compact Layout"
+          >
+            <Layers className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Direction Group */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+          <button
+            onClick={() => setDirection('TB')}
+            className={`p-2 rounded ${direction === 'TB' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Top to Bottom"
+          >
+            <ArrowDown className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setDirection('LR')}
+            className={`p-2 rounded ${direction === 'LR' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Left to Right"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Zoom Controls Group */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+          <button
+            onClick={() => zoomIn({ duration: 200 })}
+            className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
+            title="Zoom In"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => zoomOut({ duration: 200 })}
+            className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
+            title="Zoom Out"
+          >
+            <Minus className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => fitView({ padding: 0.3, duration: 300 })}
+            className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 active:bg-blue-50 active:text-blue-600"
+            title="Fit to Screen"
+          >
+            <Maximize2 className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <ReactFlow
