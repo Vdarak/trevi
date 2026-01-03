@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
@@ -36,6 +36,9 @@ export default function Home() {
   // Chat sidebar state (full conversation)
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+
+  // Pending chats for optimistic UI (SWR pattern)
+  const [pendingChats, setPendingChats] = useState<Array<{ id: string, name: string, isLoading: boolean }>>([]);
 
   // Get all conversation nodes for full sidebar (nodes with payloads, in order)
   const conversationNodes = useMemo(() => {
@@ -89,6 +92,10 @@ export default function Home() {
     try {
       const request = createNewChatRequest(message);
 
+      // Add optimistic pending chat with query as name
+      const pendingId = `pending-${Date.now()}`;
+      setPendingChats(prev => [...prev, { id: pendingId, name: message.slice(0, 50) + (message.length > 50 ? '...' : ''), isLoading: true }]);
+
       await sendMessage(
         request,
         (update) => {
@@ -120,6 +127,9 @@ export default function Home() {
           setStatusMessage("");
           setIsLoading(false);
           setIsCreatingChat(false);
+
+          // Remove pending chat now that real chat exists
+          setPendingChats([]);
         },
         (error) => {
           console.error("Message error:", error);
@@ -135,6 +145,7 @@ export default function Home() {
       setIsLoading(false);
       setIsCreatingChat(false);
       setIsStreaming(false);
+      setPendingChats([]); // Clear pending on error
     }
   }, [rootNodeId]);
 
@@ -190,7 +201,12 @@ export default function Home() {
       const { nodes, currentNodeId: nodeId, rootNodeId: root } = buildGraphNodesFromResponse(graphResponse);
 
       setGraphNodes(nodes);
-      setCurrentNodeId(nodeId);
+
+      // Restore active node from localStorage if available, otherwise use API's current_node
+      const savedNodeId = localStorage.getItem(`trevi-active-node-${chatId}`);
+      const activeNodeId = savedNodeId && nodes.some(n => n.id === savedNodeId) ? savedNodeId : nodeId;
+      setCurrentNodeId(activeNodeId);
+
       setRootNodeId(root);
       setResponses([]);
       setStatusMessage("");
@@ -284,6 +300,13 @@ export default function Home() {
     setCurrentNodeId(nodeId);
   }, []);
 
+  // Persist active node to localStorage when it changes
+  useEffect(() => {
+    if (currentChatId && currentNodeId) {
+      localStorage.setItem(`trevi-active-node-${currentChatId}`, currentNodeId);
+    }
+  }, [currentChatId, currentNodeId]);
+
   // Toggle full conversation sidebar
   const toggleChatSidebar = useCallback(() => {
     setIsChatSidebarOpen(prev => !prev);
@@ -296,7 +319,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
-      {/* Left Sidebar - Chat History */}
+      {/* Left Sidebar - Knowledge Spaces */}
       <Sidebar
         selectedChatId={currentChatId}
         onChatSelect={handleChatSelect}
@@ -304,6 +327,7 @@ export default function Home() {
         onLogoClick={handleLogoClick}
         onChatDeleted={handleLogoClick}
         isCreatingChat={isCreatingChat}
+        pendingChats={pendingChats}
       />
 
       {/* Main Content Area - flexes to accommodate right sidebar */}
@@ -321,6 +345,7 @@ export default function Home() {
               loadingNodeId={loadingNodeId}
               onToggleChatSidebar={toggleChatSidebar}
               isChatSidebarOpen={isChatSidebarOpen}
+              initialActiveNodeId={currentNodeId}
             />
           ) : (
             <ChatInterface

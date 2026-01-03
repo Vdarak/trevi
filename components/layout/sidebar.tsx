@@ -2,11 +2,17 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
+
+interface PendingChat {
+  id: string;
+  name: string;
+  isLoading: boolean;
+}
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   selectedChatId?: string | null;
@@ -15,6 +21,7 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onLogoClick?: () => void;
   onChatDeleted?: () => void;
   isCreatingChat?: boolean;
+  pendingChats?: PendingChat[]; // Chats currently being generated
 }
 
 export function Sidebar({
@@ -25,6 +32,7 @@ export function Sidebar({
   onLogoClick,
   onChatDeleted,
   isCreatingChat,
+  pendingChats = [],
   ...props
 }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -94,26 +102,28 @@ export function Sidebar({
       <div className="space-y-4 py-4 flex-1 overflow-y-auto">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight flex items-center gap-2 text-slate-800">
-            <MessageSquare className="w-4 h-4" />
-            Chats
+            Knowledge Spaces
           </h2>
           <div className="space-y-1">
-            {/* Show loading state when creating a new chat */}
-            {isCreatingChat && (
+            {/* Show pending chats with optimistic names */}
+            {pendingChats.map((pending) => (
               <Button
+                key={pending.id}
                 variant="ghost"
-                className="w-full justify-start text-slate-400 font-normal italic animate-pulse"
-                disabled
+                className="w-full justify-start text-slate-500 font-normal italic h-auto py-2"
+                disabled={pending.isLoading}
               >
-                <div className="w-4 h-4 mr-2 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                New Chat...
+                <div className="flex items-center gap-2 w-full">
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <span className="text-sm truncate">{pending.name}</span>
+                </div>
               </Button>
-            )}
+            ))}
 
             {loading ? (
               <p className="px-4 text-sm text-slate-400">Loading...</p>
-            ) : chats.length === 0 ? (
-              <p className="px-4 text-sm text-slate-400">No chats yet</p>
+            ) : chats.length === 0 && pendingChats.length === 0 ? (
+              <p className="px-4 text-sm text-slate-400">No knowledge spaces yet</p>
             ) : (
               chats.map((chat) => (
                 <div

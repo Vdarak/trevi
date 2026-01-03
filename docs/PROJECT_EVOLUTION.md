@@ -463,5 +463,207 @@ The project demonstrates:
 This case study illustrates how thoughtful technical decisions compound into a polished product.
 
 ---
+🧪 Pilot Testing Strategy for Trevi
+Understanding Your Context
+Trevi is an AI-powered research and brainstorming tool that visualizes conversations as explorable knowledge graphs—similar to NotebookLM in its learning/research orientation. Current features include:
+
+Knowledge graph exploration (expand/collapse nodes, direction-based exploration)
+SSE streaming chat with AI responses
+Conversation visualization (tree-based layout with animations)
+Citation system (source attribution)
+Basic feedback modal (already implemented!)
+1. 🎯 Where to Stem Your Thinking From
+Your thinking should stem from three foundational pillars:
+
+A. Jobs-To-Be-Done (JTBD) Framework
+Ask: What job is the user hiring Trevi to do?
+
+Learning/Research: "Help me understand a complex topic by exploring it visually"
+Synthesis: "Help me see how concepts connect"
+Discovery: "Help me find related areas I didn't know to ask about"
+B. The Double Diamond Model
+Discover: What are users actually trying to accomplish?
+Define: What specific problems does Trevi solve?
+Develop: How well does the current implementation solve them?
+Deliver: What refinements maximize value?
+C. Learning Science Principles (Since it's a learning tool)
+Elaborative Interrogation: Does the graph help users ask "why" and "how"?
+Spaced/Distributed Practice: Could users return and build on previous explorations?
+Concrete Examples: Are the AI responses grounded in references/citations?
+2. 📊 Metrics That Actually Matter for a Learning Tool
+Engagement Metrics (Quantitative)
+Metric	What It Measures	How to Collect
+Session Duration	Time spent actively exploring	Timestamp events
+Exploration Depth	Max graph depth reached per session	Track node depth
+Branch Exploration Rate	How many direction nodes clicked vs. available	Log direction clicks
+Return Rate	Users returning to previous conversations	Session analytics
+Message-to-Graph Ratio	How often users explore vs. just chat	Event logging
+Learning-Specific Metrics
+Metric	What It Measures	Why It Matters
+Node Revisit Rate	How often users return to previous nodes	Indicates comprehension/reference behavior
+Citation Click-Through Rate	Are users verifying sources?	Shows depth of engagement
+Follow-up Question Depth	Quality/sophistication of subsequent questions	Shows learning progression
+Time-to-First-Exploration	How quickly users start exploring the graph	Measures UI intuitiveness
+Usability Metrics
+Metric	What It Measures
+Task Completion Rate	Can users accomplish specific research goals?
+Error/Recovery Rate	How often users get "stuck" and how they recover
+Feature Discovery Rate	Do users find collapse/expand, layout toggles, etc.?
+3. 🔬 Unmoderated Usability Testing Strategy
+Study Structure
+Participants: 8-12 users (aim for your target persona—researchers, students, curious learners)
+
+Duration: 15-25 minutes per session
+
+Recording: Screen + optional audio (consider tools like Hotjar, FullStory, or simple browser-based recording)
+
+Task Scenarios
+Task 1: Initial Navigation (Feature Discovery)
+"You want to research the topic of 'renewable energy technologies.' Start by entering a question and then explore at least 3 related directions in the resulting graph."
+
+Measures: Time-to-first-exploration, feature discovery, navigation patterns
+
+Task 2: Deep Dive (Understanding Value Proposition)
+"You're writing a paper on a topic you chose. Use Trevi to explore this topic until you feel you've found 3 interesting sub-topics you didn't initially think of."
+
+Measures: Exploration depth, branch exploration rate, "aha moment" triggers
+
+Task 3: Reference Verification (Citation Behavior)
+"Find a specific claim in one of the AI responses and verify its source using the provided citations."
+
+Measures: Citation CTR, comprehension of citation UI
+
+Task 4: Return & Resume (Memory/State)
+"Imagine you started this research yesterday and are returning today. Navigate back to a previous topic and continue exploring from there."
+
+Measures: Navigation clarity, state management UX
+
+Task 5: Compare Orientations (Preference Testing)
+"Try switching between the vertical (↓) and horizontal (→) layout modes. Which one helps you understand the topic relationships better?"
+
+Measures: Layout preference (ties to your existing feedback modal!)
+
+4. 📝 Survey Questions Framework
+Post-Task Questions (After Each Scenario)
+Single Ease Question (SEQ) – After each task:
+
+"Overall, how easy or difficult was this task?"
+[1-7 scale: Very Difficult → Very Easy]
+
+Confidence in Output:
+
+"How confident are you that you found accurate information during this task?"
+[1-5 scale]
+
+Post-Session Questions (End of Study)
+A. System Usability Scale (SUS) – Industry Standard
+10 standardized questions that produce a benchmarkable score (0-100).
+
+B. Learning-Specific Questions
+Question	Scale	Why Ask
+"The visual graph helped me understand how concepts connect."	Likert 1-5	Core value prop validation
+"I discovered ideas I wouldn't have found through regular search."	Likert 1-5	Differentiation from alternatives
+"This tool would help me learn faster than reading articles alone."	Likert 1-5	Learning efficiency
+"I knew where to click to explore new directions."	Likert 1-5	Navigation clarity
+"The AI responses felt trustworthy and well-sourced."	Likert 1-5	Trust & credibility
+"I would use this tool for my research/study."	Likert 1-5	Intent to use
+C. Open-Ended Questions (Critical!)
+"What was the most confusing part of using this tool?" (Pain points)
+"What was your 'aha moment' – when did something click?" (Value triggers)
+"What would make you use this every day?" (Feature priorities)
+"How would you describe this tool to a friend?" (Positioning validation)
+5. 👍👎 In-App Feedback Implementation
+Level 1: Message-Level Feedback (Quick)
+For each AI response node:
+
+[👍] [👎]
+On 👍: Optional tooltip → "What made this helpful?" [dropdown: Accurate, Well-explained, Good sources, Other]
+On 👎: Required tooltip → "What went wrong?" [dropdown: Inaccurate, Confusing, Wrong topic, Missing sources, Other] + optional text
+Level 2: Direction Node Feedback
+After clicking a direction node:
+
+"Was this direction helpful?" [👍] [👎]
+Measures: Quality of AI-generated exploration suggestions
+
+Level 3: Session-End Prompt
+After 10+ minutes of activity OR when closing the tab:
+
+"Quick feedback: Did you find what you were looking for?" [Yes, partially] [Yes, completely] [No]
+
+Level 4: Passive Behavioral Signals
+Implicit positive: Long dwell time on a node, citation clicks, follow-up questions
+Implicit negative: Immediate back navigation, repeated rephrasing, session abandonment
+6. 📈 Data Collection Architecture
+Event Taxonomy (What to Log)
+typescript
+interface TelemetryEvent {
+  eventType: 
+    | 'session_start' | 'session_end'
+    | 'message_sent' | 'response_received'
+    | 'direction_clicked' | 'node_clicked' | 'node_expanded' | 'node_collapsed'
+    | 'citation_hovered' | 'citation_clicked'
+    | 'layout_changed' | 'orientation_changed'
+    | 'zoom_changed' | 'fit_view_triggered'
+    | 'feedback_thumbs_up' | 'feedback_thumbs_down'
+    | 'feedback_modal_opened' | 'feedback_submitted';
+  
+  timestamp: string;
+  sessionId: string;
+  chatId?: string;
+  nodeId?: string;
+  nodeDepth?: number;
+  metadata?: Record<string, any>;
+}
+Storage Options (Simple)
+Console logging during pilot (for your review)
+LocalStorage aggregation (then export on feedback submit)
+Simple backend endpoint that writes to JSON/CSV
+Third-party: Mixpanel free tier, PostHog (self-hosted), Plausible
+7. 🎯 What to Prioritize in Pilot Testing
+Priority 1: Core Loop Validation
+"Do users understand and use the explore-via-directions paradigm?"
+
+This is your unique value proposition. If users don't click direction nodes, the product fails.
+
+Priority 2: Trust & Credibility
+"Do users trust the AI responses enough to act on them?"
+
+For a learning tool, trust is paramount. Citations must feel reliable.
+
+Priority 3: Navigation & Orientation
+"Can users navigate a growing graph without feeling lost?"
+
+Collapse/expand, path highlighting, and layout become critical at scale.
+
+Priority 4: Value Articulation
+"Can users explain what this tool does better than alternatives?"
+
+This determines word-of-mouth and PMF.
+
+8. 🚀 Quick Implementation Roadmap
+Phase 1: Instrumentation (Add Event Logging)
+Add basic telemetry events to key interactions
+Extend your existing 
+FeedbackModal
+ to include session data export
+Phase 2: In-App Feedback UI
+Add 👍/👎 to AI response messages in conversation panel
+Add optional "why" dropdown on thumbs down
+Phase 3: Unmoderated Study Setup
+Create a study guide document with tasks
+Set up screen recording (or use Hotjar/FullStory)
+Recruit 8-12 participants
+Phase 4: Analysis
+Analyze completion rates, behavioral patterns, and qualitative feedback
+Identify top 3 friction points
+Prioritize fixes
+Summary: Key Questions Your Pilot Should Answer
+Discovery: Do users find and use direction nodes?
+Understanding: Does the graph visualization aid comprehension?
+Trust: Do users believe the AI's responses?
+Navigation: Can users manage complex, deep graphs?
+Value: Would users choose this over ChatGPT + manual note-taking?
+
+
 
 *Document generated for portfolio and stakeholder presentation purposes.*

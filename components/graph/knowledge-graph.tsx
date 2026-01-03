@@ -43,6 +43,7 @@ export interface KnowledgeGraphProps {
   loadingNodeId?: string | null; // Node ID currently being loaded
   onToggleChatSidebar?: () => void; // Toggle full conversation sidebar
   isChatSidebarOpen?: boolean; // Whether the chat sidebar is open
+  initialActiveNodeId?: string | null; // Active node to highlight on initial load
 }
 
 // ============================================================================
@@ -447,26 +448,40 @@ function findSnippetForCitation(citationIndex: number, citations?: Citation[]): 
   return snippet && snippet !== "Source paragraph not found" ? snippet : null;
 }
 
-// Citation tooltip component - simple CSS-based approach
+// Citation tooltip component - dialog-style with scrollable content
 function CitationTooltipGraph({
   index,
-  content
+  content,
+  title = 'Source'
 }: {
   index: string;
   content: string;
+  title?: string;
 }) {
   return (
     <span className="inline-flex items-baseline relative group cursor-pointer">
       <sup className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors leading-none">
         {index}
       </sup>
-      {/* Tooltip - CSS only with group-hover */}
-      <span
-        className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 max-h-32 overflow-y-auto px-2.5 py-2 text-[10px] bg-slate-800 text-white rounded-lg shadow-xl whitespace-normal leading-relaxed"
+      {/* Dialog-style tooltip with scrollable content and footer */}
+      <div
+        className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
         style={{ zIndex: 99999 }}
       >
-        {content}
-      </span>
+        {/* Scrollable content area */}
+        <div className="max-h-40 overflow-y-auto px-3 py-2.5 text-[10px] text-slate-700 leading-relaxed">
+          {content}
+        </div>
+        {/* Footer with source indicator */}
+        <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center gap-1.5">
+          <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+          <span className="text-[10px] text-slate-500 truncate font-medium">
+            {title}
+          </span>
+        </div>
+      </div>
     </span>
   );
 }
@@ -931,7 +946,7 @@ function useLayoutAnimation(
     startNodesRef.current = startNodeMap;
 
     // 2. Start Animation Loop
-    const duration = 900; // ms
+    const duration = 1200; // ms - slower for smoother expand/collapse
 
     const animate = (timestamp: number) => {
       if (!startTimeRef.current) startTimeRef.current = timestamp;
@@ -1026,8 +1041,8 @@ function useLayoutAnimation(
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeId, onToggleChatSidebar, isChatSidebarOpen }: KnowledgeGraphProps) {
-  const { fitView, getViewport, zoomIn, zoomOut } = useReactFlow();
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeId, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId }: KnowledgeGraphProps) {
+  const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
@@ -1035,7 +1050,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [layoutMode, setLayoutMode] = useState<'custom' | 'tidy'>('custom');
   const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
-  const [activeNodeId, setActiveNodeId] = useState<string | null>(null); // Track clicked/active node for persistent path highlighting
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(initialActiveNodeId || null); // Track clicked/active node for persistent path highlighting
 
   // Node conversation panel state - uses FLOW coordinates to pan/zoom with graph
   const [selectedNodePanel, setSelectedNodePanel] = useState<{
@@ -1056,6 +1071,16 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const prevLoadingRef = useRef(false);
   // Track previous node count
   const prevNodeCountRef = useRef(0);
+  // Track previous rootNodeId to detect chat changes
+  const prevRootNodeIdRef = useRef<string | undefined>(undefined);
+
+  // Reset initial fit flag when rootNodeId changes (new chat loaded)
+  useEffect(() => {
+    if (rootNodeId !== prevRootNodeIdRef.current) {
+      hasInitialFitRef.current = false;
+      prevRootNodeIdRef.current = rootNodeId;
+    }
+  }, [rootNodeId]);
 
   // Auto-fit view when loading completes or new nodes are added
   useEffect(() => {
@@ -1174,8 +1199,37 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // Toggle collapse state for a node
+  // Toggle collapse state for a node with synchronized camera animation
   const toggleCollapse = useCallback((nodeId: string) => {
+    const isCurrentlyCollapsed = collapsedNodes.has(nodeId);
+    const currentNodes = getNodes();
+
+    // Find the node being toggled and its parent
+    const toggledNode = currentNodes.find(n => n.id === nodeId);
+    const parentNode = toggledNode?.data?.parentId
+      ? currentNodes.find(n => n.id === toggledNode.data.parentId)
+      : null;
+
+    // Calculate which nodes to fit in view
+    let nodesToFit: typeof currentNodes = [];
+
+    if (isCurrentlyCollapsed) {
+      // Expanding: fit parent + the node + its children that will become visible
+      const childIds = childMap.get(nodeId) || [];
+      nodesToFit = currentNodes.filter(n =>
+        n.id === nodeId ||
+        (parentNode && n.id === parentNode.id) ||
+        childIds.includes(n.id)
+      );
+    } else {
+      // Collapsing: fit parent + the node being collapsed
+      nodesToFit = currentNodes.filter(n =>
+        n.id === nodeId ||
+        (parentNode && n.id === parentNode.id)
+      );
+    }
+
+    // Update collapse state
     setCollapsedNodes((prev) => {
       const next = new Set(prev);
       if (next.has(nodeId)) {
@@ -1185,7 +1239,23 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       }
       return next;
     });
-  }, []);
+
+    // Animate camera to focus on relevant nodes (with matching duration)
+    if (nodesToFit.length > 0) {
+      // Calculate bounds of nodes to fit
+      const padding = 100;
+      const minX = Math.min(...nodesToFit.map(n => n.position.x)) - padding;
+      const maxX = Math.max(...nodesToFit.map(n => n.position.x + (getNodeWidth(String(n.data.label || '')) || 200))) + padding;
+      const minY = Math.min(...nodesToFit.map(n => n.position.y)) - padding;
+      const maxY = Math.max(...nodesToFit.map(n => n.position.y + 50)) + padding;
+
+      // Animate to bounds with same duration as node animation (1200ms)
+      fitBounds(
+        { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        { duration: 1200, padding: 0.2 }
+      );
+    }
+  }, [collapsedNodes, getNodes, childMap, fitBounds]);
 
   // Re-sync when layoutedNodes change - completely replace the nodes/edges arrays
   // We use useLayoutAnimation to handle the transition
