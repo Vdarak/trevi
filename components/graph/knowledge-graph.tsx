@@ -18,10 +18,10 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass } from 'lucide-react';
+import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass, PanelRight, Maximize } from 'lucide-react';
 import { CompleteEvent, MessagePayload, Citation } from '@/lib/api';
 import { hierarchy, tree } from 'd3-hierarchy';
-import { NodeConversationPanel } from '@/components/chat/node-conversation-panel';
+import { NodeConversationPanel, NodeConversationModal } from '@/components/chat/node-conversation-panel';
 
 // ============================================================================
 // Types
@@ -39,13 +39,24 @@ export interface GraphNode {
 
 export interface KnowledgeGraphProps {
   nodes: GraphNode[];
-  rootNodeId?: string;
+  rootNodeId?: string; // Primary root for single-root backward compatibility
+  rootNodeIds?: string[]; // Multiple roots for multi-graph support
   onNodeClick?: (nodeId: string) => void;
   onDirectionClick?: (nodeId: string) => void; // Callback for clicking direction nodes
   loadingNodeId?: string | null; // Node ID currently being loaded
   onToggleChatSidebar?: () => void; // Toggle full conversation sidebar
   isChatSidebarOpen?: boolean; // Whether the chat sidebar is open
   initialActiveNodeId?: string | null; // Active node to highlight on initial load
+  onNodeMessage?: (nodeId: string, message: string) => void; // Callback for sending message from node panel
+  isNodeStreaming?: boolean; // Whether a node panel is currently streaming
+  nodeStatusMessage?: string; // Status message for node panel streaming
+  // Global status indicator
+  globalStatus?: {
+    isActive: boolean;
+    message: string;
+    type: 'streaming' | 'exploring' | 'idle';
+    activeNodeLabel?: string;
+  };
 }
 
 // ============================================================================
@@ -72,6 +83,8 @@ function getNodeWidth(label: string): number {
  * - Each node's descendants stay in a dedicated vertical column
  * - Sister nodes never have overlapping subtrees
  * - Parent nodes are centered over their children
+ * 
+ * Supports multiple disconnected trees (multiple root nodes).
  */
 function getTreeLayout(
   nodes: Node[],
@@ -93,9 +106,9 @@ function getTreeLayout(
     childrenMap.set(edge.source, children);
   });
 
-  // Find root node (no parent)
-  const rootId = nodes.find((n) => !parentMap.has(n.id))?.id;
-  if (!rootId) return { nodes, edges };
+  // Find ALL root nodes (nodes without parents)
+  const rootIds = nodes.filter((n) => !parentMap.has(n.id)).map(n => n.id);
+  if (rootIds.length === 0) return { nodes, edges };
 
   // Calculate the breadth (width in TB, height in LR) each subtree needs
   const subtreeBreadths = new Map<string, number>();
@@ -130,7 +143,8 @@ function getTreeLayout(
     return breadth;
   }
 
-  calculateSubtreeBreadth(rootId);
+  // Calculate breadth for all trees
+  rootIds.forEach(rootId => calculateSubtreeBreadth(rootId));
 
   // Position nodes
   const positions = new Map<string, { x: number; y: number }>();
@@ -185,13 +199,34 @@ function getTreeLayout(
     });
   }
 
-  const totalBreadth = subtreeBreadths.get(rootId) || 180;
-  // Start centered
-  if (isLR) {
-    positionNode(rootId, 0, -totalBreadth / 2);
-  } else {
-    positionNode(rootId, -totalBreadth / 2, 0);
-  }
+  // Calculate total breadth across all trees to center them
+  let totalAllTreesBreadth = 0;
+  const treeBreadths: number[] = [];
+  rootIds.forEach((rootId, index) => {
+    const treeBreadth = subtreeBreadths.get(rootId) || 180;
+    treeBreadths.push(treeBreadth);
+    totalAllTreesBreadth += treeBreadth;
+    if (index < rootIds.length - 1) {
+      totalAllTreesBreadth += SUBTREE_SEP * 2; // Extra spacing between different trees
+    }
+  });
+
+  // Position each tree, spacing them out horizontally (TB) or vertically (LR)
+  let currentTreeOffset = -totalAllTreesBreadth / 2;
+  rootIds.forEach((rootId, index) => {
+    const treeBreadth = treeBreadths[index];
+    
+    if (isLR) {
+      positionNode(rootId, 0, currentTreeOffset);
+    } else {
+      positionNode(rootId, currentTreeOffset, 0);
+    }
+    
+    currentTreeOffset += treeBreadth;
+    if (index < rootIds.length - 1) {
+      currentTreeOffset += SUBTREE_SEP * 2; // Extra spacing between trees
+    }
+  });
 
   // Apply positions to nodes
   const layoutedNodes = nodes.map((node) => {
@@ -210,6 +245,8 @@ function getTreeLayout(
 /**
  * Tidy tree layout using d3-hierarchy's Reingold-Tilford algorithm.
  * This produces a more compact and balanced tree structure.
+ * 
+ * Supports multiple disconnected trees (multiple root nodes).
  */
 function getTidyTreeLayout(
   nodes: Node[],
@@ -220,7 +257,7 @@ function getTidyTreeLayout(
 
   const isLR = direction === 'LR';
 
-  // Build parent-child relationships to find root and build hierarchy
+  // Build parent-child relationships to find roots and build hierarchy
   const childMap = new Map<string, string[]>();
   const parentMap = new Map<string, string>();
 
@@ -231,81 +268,138 @@ function getTidyTreeLayout(
     childMap.set(edge.source, children);
   });
 
-  // Find root node
-  const rootId = nodes.find((n) => !parentMap.has(n.id))?.id;
-  if (!rootId) return { nodes, edges };
+  // Find ALL root nodes (nodes without parents)
+  const rootNodes = nodes.filter((n) => !parentMap.has(n.id));
+  if (rootNodes.length === 0) return { nodes, edges };
 
-  const rootNode = nodes.find(n => n.id === rootId);
-  if (!rootNode) return { nodes, edges };
+  // Position map for all nodes
+  const allPositions = new Map<string, { x: number; y: number }>();
 
-  // Create D3 hierarchy
-  const d3Root = hierarchy(rootNode, (d) => {
-    const childrenIds = childMap.get(d.id);
-    return childrenIds?.map(id => nodes.find(n => n.id === id)!) || null;
+  // Process each tree separately and track their bounds
+  const treeBounds: Array<{ minBreadth: number; maxBreadth: number }> = [];
+  
+  rootNodes.forEach((rootNode) => {
+    // Create D3 hierarchy for this tree
+    const d3Root = hierarchy(rootNode, (d) => {
+      const childrenIds = childMap.get(d.id);
+      return childrenIds?.map(id => nodes.find(n => n.id === id)!) || null;
+    });
+
+    // Configure tree layout
+    const treeLayout = tree<Node>();
+
+    if (isLR) {
+      // Calculate max width per depth level for this tree
+      const depthWidths = new Map<number, number>();
+      d3Root.each((node) => {
+        const width = getNodeWidth(node.data.data.label as string);
+        const currentMax = depthWidths.get(node.depth) || 0;
+        depthWidths.set(node.depth, Math.max(currentMax, width));
+      });
+
+      treeLayout
+        .nodeSize([NODE_HEIGHT, 1])
+        .separation((a, b) => {
+          return (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP) / NODE_HEIGHT + 1;
+        });
+
+      treeLayout(d3Root);
+
+      // Fix X coordinates (depth) based on max widths
+      d3Root.each((node) => {
+        let x = 0;
+        for (let i = 0; i < node.depth; i++) {
+          x += (depthWidths.get(i) || 180) + RANK_SEP;
+        }
+        node.y = x;
+      });
+
+    } else {
+      // TB Layout
+      treeLayout
+        .nodeSize([1, NODE_HEIGHT + RANK_SEP])
+        .separation((a, b) => {
+          const widthA = getNodeWidth(a.data.data.label as string);
+          const widthB = getNodeWidth(b.data.data.label as string);
+          const distance = (widthA + widthB) / 2 + (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP);
+          return distance;
+        });
+
+      treeLayout(d3Root);
+    }
+
+    // Calculate bounds for this tree
+    let minBreadth = Infinity;
+    let maxBreadth = -Infinity;
+    d3Root.each((node) => {
+      const breadth = isLR ? (node.x ?? 0) : (node.x ?? 0);
+      minBreadth = Math.min(minBreadth, breadth);
+      maxBreadth = Math.max(maxBreadth, breadth);
+    });
+
+    treeBounds.push({ minBreadth, maxBreadth });
+
+    // Store positions temporarily (will offset later)
+    d3Root.each((d3Node) => {
+      allPositions.set(d3Node.data.id, isLR
+        ? { x: d3Node.y ?? 0, y: d3Node.x ?? 0 }
+        : { x: d3Node.x ?? 0, y: d3Node.y ?? 0 });
+    });
   });
 
-  // Configure tree layout
-  const treeLayout = tree<Node>();
+  // Calculate offsets to space out multiple trees
+  if (rootNodes.length > 1) {
+    let currentOffset = 0;
+    
+    rootNodes.forEach((rootNode, treeIndex) => {
+      const bounds = treeBounds[treeIndex];
+      const treeWidth = bounds.maxBreadth - bounds.minBreadth;
+      const treeOffset = currentOffset - bounds.minBreadth;
 
-  if (isLR) {
-    // LR Layout
-    // nodeSize([height, width]) - height is vertical spacing (breadth), width is horizontal (depth)
-    // But D3 tree uses x for breadth and y for depth usually.
-    // We will map d3.x -> screen.y (breadth) and d3.y -> screen.x (depth)
-
-    // Calculate max width per depth level to ensure alignment
-    const depthWidths = new Map<number, number>();
-    d3Root.each((node) => {
-      const width = getNodeWidth(node.data.data.label as string);
-      const currentMax = depthWidths.get(node.depth) || 0;
-      depthWidths.set(node.depth, Math.max(currentMax, width));
-    });
-
-    treeLayout
-      .nodeSize([NODE_HEIGHT, 1]) // 1 is dummy depth, we'll fix it manually
-      .separation((a, b) => {
-        // Vertical separation
-        return (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP) / NODE_HEIGHT + 1;
-      });
-
-    treeLayout(d3Root);
-
-    // Fix X coordinates (depth) based on max widths
-    d3Root.each((node) => {
-      let x = 0;
-      for (let i = 0; i < node.depth; i++) {
-        x += (depthWidths.get(i) || 180) + RANK_SEP;
+      // Get all nodes in this tree
+      const treeNodeIds = new Set<string>();
+      function collectTreeNodes(nodeId: string) {
+        treeNodeIds.add(nodeId);
+        (childMap.get(nodeId) || []).forEach(collectTreeNodes);
       }
-      // d3.y is depth, but we overwrite it
-      node.y = x;
-    });
+      collectTreeNodes(rootNode.id);
 
-  } else {
-    // TB Layout
-    treeLayout
-      .nodeSize([1, NODE_HEIGHT + RANK_SEP])
-      .separation((a, b) => {
-        const widthA = getNodeWidth(a.data.data.label as string);
-        const widthB = getNodeWidth(b.data.data.label as string);
-        const distance = (widthA + widthB) / 2 + (a.parent === b.parent ? SIBLING_SEP : SUBTREE_SEP);
-        return distance;
+      // Apply offset to all nodes in this tree
+      treeNodeIds.forEach((nodeId) => {
+        const pos = allPositions.get(nodeId);
+        if (pos) {
+          if (isLR) {
+            allPositions.set(nodeId, { x: pos.x, y: pos.y + treeOffset });
+          } else {
+            allPositions.set(nodeId, { x: pos.x + treeOffset, y: pos.y });
+          }
+        }
       });
 
-    treeLayout(d3Root);
+      currentOffset += treeWidth + SUBTREE_SEP * 2; // Extra spacing between trees
+    });
+
+    // Center all trees
+    const totalWidth = currentOffset - SUBTREE_SEP * 2;
+    const centerOffset = -totalWidth / 2;
+    allPositions.forEach((pos, nodeId) => {
+      if (isLR) {
+        allPositions.set(nodeId, { x: pos.x, y: pos.y + centerOffset });
+      } else {
+        allPositions.set(nodeId, { x: pos.x + centerOffset, y: pos.y });
+      }
+    });
   }
 
   // Map positions back to nodes
   const layoutedNodes = nodes.map((node) => {
-    const d3Node = d3Root.descendants().find((d) => d.data.id === node.id);
-
-    if (d3Node) {
+    const pos = allPositions.get(node.id);
+    if (pos) {
       return {
         ...node,
         targetPosition: isLR ? Position.Left : Position.Top,
         sourcePosition: isLR ? Position.Right : Position.Bottom,
-        position: isLR
-          ? { x: d3Node.y ?? 0, y: d3Node.x ?? 0 } // Swap for LR: d3.y is depth(x), d3.x is breadth(y)
-          : { x: d3Node.x ?? 0, y: d3Node.y ?? 0 },
+        position: pos,
       };
     }
     return {
@@ -318,15 +412,17 @@ function getTidyTreeLayout(
 }
 
 /**
- * Finds the path from a node to the root by traversing edges backwards.
+ * Finds the path from a node to its root by traversing edges backwards.
+ * Works with multiple roots - traverses until no parent is found.
  */
 function findPathToRoot(
   nodeId: string,
   edges: Edge[],
-  rootId: string
+  rootIds: string[] | string // Accept single root for backwards compat or array
 ): { nodeIds: Set<string>; edgeIds: Set<string> } {
   const nodeIds = new Set<string>([nodeId]);
   const edgeIds = new Set<string>();
+  const rootIdSet = new Set(Array.isArray(rootIds) ? rootIds : [rootIds]);
 
   // Build parent map from edges
   const parentMap = new Map<string, { parentId: string; edgeId: string }>();
@@ -334,9 +430,9 @@ function findPathToRoot(
     parentMap.set(edge.target, { parentId: edge.source, edgeId: edge.id });
   });
 
-  // Traverse up to root
+  // Traverse up to root (stop when we reach any root or no parent)
   let currentId = nodeId;
-  while (currentId !== rootId && parentMap.has(currentId)) {
+  while (!rootIdSet.has(currentId) && parentMap.has(currentId)) {
     const parent = parentMap.get(currentId)!;
     nodeIds.add(parent.parentId);
     edgeIds.add(parent.edgeId);
@@ -881,13 +977,19 @@ interface ConversationPanelNodeData {
   label: string;
   onClose: () => void;
   citations?: Citation[];
+  onSendMessage?: (message: string) => void;
+  isStreaming?: boolean;
+  statusMessage?: string;
 }
 
 /**
- * Minimal conversation panel showing ONLY AI response text.
- * No header, no chat bubbles, no user messages - just clean readable content.
+ * Conversation panel with title bar, content, and chat input.
+ * Appears attached to nodes in the graph.
  */
 function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
   // Filter and combine only assistant messages
   const aiContent = useMemo(() => {
     const assistantMessages = data.messages.filter(msg => msg.role === 'assistant');
@@ -899,11 +1001,20 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
     e.stopPropagation();
   }, []);
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (inputValue.trim() && !data.isStreaming && data.onSendMessage) {
+      data.onSendMessage(inputValue.trim());
+      setInputValue('');
+    }
+  };
+
   if (!aiContent) return null;
 
   return (
     <div
-      className="w-[360px] max-h-[400px] bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-scale-in"
+      className="w-[400px] max-h-[500px] bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-scale-in flex flex-col"
       onWheelCapture={handleWheel}
     >
       {/* Target Handle on left - for edge connection */}
@@ -914,24 +1025,64 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
         style={{ left: -5 }}
       />
 
-      {/* Close button - small, top-right corner */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onClose();
-        }}
-        className="absolute top-2 right-2 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors z-10"
-      >
-        <X className="w-3.5 h-3.5" />
-      </button>
+      {/* Header with title and close button */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
+        <h3 className="font-semibold text-slate-800 text-sm truncate pr-4 flex-1">
+          {data.label || 'Conversation'}
+        </h3>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onClose();
+          }}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
       {/* Scrollable AI content - clean reading experience */}
       <div
-        className="overflow-y-auto overflow-x-hidden p-4 pr-8 text-sm text-slate-700 leading-relaxed"
-        style={{ maxHeight: '400px', scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
+        className="flex-1 overflow-y-auto overflow-x-hidden p-4 text-sm text-slate-700 leading-relaxed"
+        style={{ maxHeight: '350px', scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
       >
         {renderSimpleMarkdown(aiContent, data.citations)}
       </div>
+
+      {/* Chat input */}
+      {data.onSendMessage && (
+        <div className="border-t border-slate-100 p-3 bg-white flex-shrink-0">
+          {data.isStreaming && data.statusMessage && (
+            <div className="flex items-center gap-2 text-slate-500 text-xs mb-2">
+              <div className="w-3 h-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+              <span>{data.statusMessage}</span>
+            </div>
+          )}
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              placeholder="Ask a follow-up..."
+              disabled={data.isStreaming}
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            />
+            <button
+              type="submit"
+              disabled={!inputValue.trim() || data.isStreaming}
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -1056,11 +1207,15 @@ function useLayoutAnimation(
     const currentNodeMap = new Map(currentNodes.map(n => [n.id, n]));
     const startNodeMap = new Map<string, Node>();
     const exitingNodes: Node[] = [];
+    
+    // Preserve conversation panel nodes - they are managed separately
+    const panelNodes = currentNodes.filter(n => n.type === 'conversationPanel');
 
     // Identify exiting nodes (present in current but not in target)
+    // Exclude conversation panel nodes - they have their own lifecycle
     const targetNodeIds = new Set(targetNodes.map(n => n.id));
     currentNodes.forEach(node => {
-      if (!targetNodeIds.has(node.id)) {
+      if (!targetNodeIds.has(node.id) && node.type !== 'conversationPanel') {
         exitingNodes.push(node);
       }
     });
@@ -1189,14 +1344,14 @@ function useLayoutAnimation(
         };
       });
 
-      setNodes([...nextTargetNodes, ...nextExitingNodes]);
+      setNodes([...nextTargetNodes, ...nextExitingNodes, ...panelNodes]);
 
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
         startTimeRef.current = null;
-        // Final state: only target nodes
-        setNodes(targetNodes);
+        // Final state: target nodes + preserved panel nodes
+        setNodes([...targetNodes, ...panelNodes]);
         onAnimationComplete?.();
       }
     };
@@ -1206,8 +1361,13 @@ function useLayoutAnimation(
     startTimeRef.current = null;
     animationFrameRef.current = requestAnimationFrame(animate);
 
-    // Update edges immediately - they will follow the nodes as they move
-    setEdges(targetEdges);
+    // Update edges immediately - preserve panel edges while updating target edges
+    setEdges(currentEdges => {
+      const panelEdges = currentEdges.filter(e => e.id.startsWith('panel-edge-'));
+      // Filter out any panel edges from targetEdges to avoid duplicates
+      const nonPanelTargetEdges = targetEdges.filter(e => !e.id.startsWith('panel-edge-'));
+      return [...nonPanelTargetEdges, ...panelEdges];
+    });
 
     prevTargetNodesRef.current = targetNodes;
 
@@ -1222,7 +1382,7 @@ function useLayoutAnimation(
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeId, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeId, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, globalStatus }: KnowledgeGraphProps) {
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -1232,6 +1392,17 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(initialActiveNodeId || null); // Track clicked/active node for persistent path highlighting
+  const [viewMode, setViewMode] = useState<'panel' | 'modal'>('panel'); // Toggle between panel and modal view
+
+  // Modal state for center modal view
+  const [modalData, setModalData] = useState<{
+    isOpen: boolean;
+    nodeId: string;
+    label: string;
+    messages: MessagePayload[];
+    citations?: Citation[];
+    clickPosition?: { x: number; y: number }; // Screen position where user clicked
+  } | null>(null);
 
   // Node conversation panel state - uses FLOW coordinates to pan/zoom with graph
   const [selectedNodePanel, setSelectedNodePanel] = useState<{
@@ -1331,24 +1502,31 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   }, [graphNodes, collapsedNodes]);
 
   // Convert GraphNode[] to React Flow nodes/edges
-  const { layoutedNodes, layoutedEdges, rootId } = useMemo(() => {
+  // Supports multiple independent trees (multiple root nodes)
+  const { layoutedNodes, layoutedEdges, rootIds, primaryRootId } = useMemo(() => {
     if (graphNodes.length === 0) {
-      return { layoutedNodes: [], layoutedEdges: [], rootId: "" };
+      return { layoutedNodes: [], layoutedEdges: [], rootIds: [], primaryRootId: "" };
     }
 
-    const root = rootNodeId || graphNodes.find((n) => n.parentId === null || n.parentId === "root")?.id || graphNodes[0].id;
+    // Find all root nodes (nodes without parents)
+    const allRoots = graphNodes.filter((n) => n.parentId === null || n.parentId === "root");
+    const rootIdList = allRoots.map(n => n.id);
+    
+    // Primary root for backwards compatibility (use provided rootNodeId or first root)
+    const primaryRoot = rootNodeId || rootIdList[0] || graphNodes[0].id;
 
     // Filter out hidden nodes
     const visibleNodes = graphNodes.filter((n) => !hiddenNodes.has(n.id));
 
-    // Calculate depth for each node
+    // Calculate depth for each node (for each tree)
     const depthMap = new Map<string, number>();
     function calculateDepth(nodeId: string, depth: number) {
       depthMap.set(nodeId, depth);
       const children = childMap.get(nodeId) || [];
       children.forEach(childId => calculateDepth(childId, depth + 1));
     }
-    calculateDepth(root, 0);
+    // Calculate depth starting from each root
+    rootIdList.forEach(rootId => calculateDepth(rootId, 0));
 
     const rfNodes: Node[] = visibleNodes.map((node) => ({
       id: node.id,
@@ -1356,7 +1534,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       position: { x: 0, y: 0 },
       data: {
         label: node.label,
-        isRoot: node.id === root,
+        isRoot: rootIdList.includes(node.id), // Any root node is marked as root
         hasChildren: (childMap.get(node.id)?.length || 0) > 0,
         childCount: childMap.get(node.id)?.length || 0,
         isCollapsed: collapsedNodes.has(node.id),
@@ -1381,7 +1559,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     const layouted = layoutMode === 'tidy'
       ? getTidyTreeLayout(rfNodes, rfEdges, direction)
       : getTreeLayout(rfNodes, rfEdges, direction);
-    return { layoutedNodes: layouted.nodes, layoutedEdges: layouted.edges, rootId: root };
+    return { layoutedNodes: layouted.nodes, layoutedEdges: layouted.edges, rootIds: rootIdList, primaryRootId: primaryRoot };
   }, [graphNodes, rootNodeId, hiddenNodes, childMap, collapsedNodes, loadingNodeId, layoutMode, direction]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -1470,11 +1648,11 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     if (!activeNodeId) {
       return { activePathNodeIds: new Set<string>(), activePathEdgeIds: new Set<string>(), lastEdgeId: null as string | null };
     }
-    const { nodeIds, edgeIds } = findPathToRoot(activeNodeId, layoutedEdges, rootId);
+    const { nodeIds, edgeIds } = findPathToRoot(activeNodeId, layoutedEdges, rootIds);
     // The last edge is the one that connects to the active node (target = activeNodeId)
     const lastEdge = layoutedEdges.find(e => e.target === activeNodeId);
     return { activePathNodeIds: nodeIds, activePathEdgeIds: edgeIds, lastEdgeId: lastEdge?.id || null };
-  }, [activeNodeId, layoutedEdges, rootId]);
+  }, [activeNodeId, layoutedEdges, rootIds]);
 
   // Effect to apply active path styling immediately when activeNodeId changes
   // This ensures the highlighting persists across all operations
@@ -1596,7 +1774,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       setHoveredNodeId(node.id);
       setTooltipPosition({ x: event.clientX, y: event.clientY });
 
-      const { nodeIds: hoverNodeIds, edgeIds: hoverEdgeIds } = findPathToRoot(node.id, edges, rootId);
+      const { nodeIds: hoverNodeIds, edgeIds: hoverEdgeIds } = findPathToRoot(node.id, edges, rootIds);
       // Find last edge for hover path (target = hovered node)
       const hoverLastEdge = edges.find(e => e.target === node.id);
 
@@ -1653,7 +1831,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         })
       );
     },
-    [edges, rootId, activePathEdgeIds, lastEdgeId, setNodes, setEdges]
+    [edges, rootIds, activePathEdgeIds, lastEdgeId, setNodes, setEdges]
   );
 
   // Track mouse movement for tooltip
@@ -1718,54 +1896,84 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       // Find the graph node data to check for messages
       const graphNode = graphNodes.find(n => n.id === node.id);
 
-      // First, remove any existing panel node and its edge
-      setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
-      setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+      // For modal mode: close modal and open new one
+      // For panel mode: allow multiple panels (toggle existing panel for same node)
+      if (viewMode === 'modal') {
+        // Close any existing modal
+        setModalData(null);
+        // Remove all panels when in modal mode
+        setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
+        setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+      }
 
       if (graphNode?.payload && graphNode.payload.length > 0) {
-        const nodeWidth = getNodeWidth(graphNode.label);
-        const PANEL_GAP = 50; // Gap between node and panel
-
-        // Create the panel node positioned to the right of clicked node
-        const panelNode: Node = {
-          id: `panel-${node.id}`,
-          type: 'conversationPanel',
-          position: {
-            x: node.position.x + nodeWidth + PANEL_GAP,
-            y: node.position.y - 150, // Offset upward to center
-          },
-          data: {
-            messages: graphNode.payload,
+        // Check view mode - either panel or modal
+        if (viewMode === 'modal') {
+          // Open center modal with click position for animation origin
+          setModalData({
+            isOpen: true,
+            nodeId: node.id,
             label: graphNode.label,
+            messages: graphNode.payload,
             citations: graphNode.citations,
-            onClose: () => {
-              // Keep activeNodeId - path highlighting should persist for context
-              // Only remove the panel node and edge
-              setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
-              setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
+            clickPosition: { x: event.clientX, y: event.clientY },
+          });
+        } else {
+          // Panel mode: Check if panel for this node already exists - toggle it
+          const existingPanelId = `panel-${node.id}`;
+          const panelExists = getNodes().some(n => n.id === existingPanelId);
+          
+          if (panelExists) {
+            // Toggle off - remove just this panel
+            setNodes(nds => nds.filter(n => n.id !== existingPanelId));
+            setEdges(eds => eds.filter(e => e.id !== `panel-edge-${node.id}`));
+          } else {
+            // Create new panel node attached to the graph (allow multiple)
+            const nodeWidth = getNodeWidth(graphNode.label);
+            const PANEL_GAP = 50; // Gap between node and panel
+            const panelId = existingPanelId;
 
-              // Clear hovered state
-              setHoveredNodeId(null);
-            },
-          },
-          draggable: false,
-          selectable: false,
-          zIndex: 9999, // Highest z-index to appear above hover highlighting
-        };
+            // Create the panel node positioned to the right of clicked node
+            const panelNode: Node = {
+              id: panelId,
+              type: 'conversationPanel',
+              position: {
+                x: node.position.x + nodeWidth + PANEL_GAP,
+                y: node.position.y - 150, // Offset upward to center
+              },
+              data: {
+                messages: graphNode.payload,
+                label: graphNode.label,
+                citations: graphNode.citations,
+                onClose: () => {
+                  // Only remove THIS specific panel node and edge (allow multiple panels)
+                  setNodes(nds => nds.filter(n => n.id !== panelId));
+                  setEdges(eds => eds.filter(e => e.id !== `panel-edge-${node.id}`));
+                },
+                onSendMessage: onNodeMessage ? (msg: string) => onNodeMessage(node.id, msg) : undefined,
+                isStreaming: isNodeStreaming,
+                statusMessage: nodeStatusMessage,
+              },
+              draggable: false,
+              selectable: false,
+              zIndex: 9999, // Highest z-index to appear above hover highlighting
+            };
 
-        // Create the connecting edge - bezier from source to target
-        const panelEdge: Edge = {
-          id: `panel-edge-${node.id}`,
-          source: node.id,
-          target: `panel-${node.id}`,
-          type: 'default', // bezier curve
-          style: { stroke: '#3b82f6', strokeWidth: 3 },
-          animated: false,
-          zIndex: 9998,
-        };
+            // Create the connecting edge - bezier from source to target
+            const panelEdge: Edge = {
+              id: `panel-edge-${node.id}`,
+              source: node.id,
+              target: panelId,
+              type: 'default', // bezier curve
+              style: { stroke: '#3b82f6', strokeWidth: 3 },
+              animated: false,
+              zIndex: 9998,
+            };
 
-        setNodes(nds => [...nds, panelNode]);
-        setEdges(eds => [...eds, panelEdge]);
+            setNodes(nds => [...nds, panelNode]);
+            setEdges(eds => [...eds, panelEdge]);
+          }
+        }
 
         // Clear old state (no longer needed)
         setSelectedNodePanel(null);
@@ -1773,7 +1981,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         setSelectedNodePanel(null);
       }
     },
-    [onNodeClick, graphNodes, setNodes, setEdges]
+    [onNodeClick, graphNodes, setNodes, setEdges, viewMode, onNodeMessage, isNodeStreaming, nodeStatusMessage, getNodes]
   );
 
   if (graphNodes.length === 0) {
@@ -1786,9 +1994,35 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   return (
     <div ref={containerRef} className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
-      {/* Chat Toggle Button - Top Right */}
+      {/* Global Status Pill - Top Center */}
+      {globalStatus && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+          <div className={`
+            flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border backdrop-blur-sm
+            ${globalStatus.isActive 
+              ? 'bg-blue-50/90 border-blue-200 text-blue-700' 
+              : 'bg-white/90 border-slate-200 text-slate-600'}
+          `}>
+            {globalStatus.isActive ? (
+              <>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                <span className="text-sm font-medium">{globalStatus.message}</span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 bg-green-500 rounded-full" />
+                <span className="text-sm font-medium truncate max-w-[200px]">
+                  {globalStatus.activeNodeLabel || 'Ready'}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Chat Toggle Button - Top Right (hidden on mobile, we have tab navigation) */}
       {onToggleChatSidebar && (
-        <div className="absolute top-4 right-4 z-50 bg-white rounded-lg shadow-md border border-slate-200 p-1">
+        <div className="hidden md:block absolute top-4 right-4 z-50 bg-white rounded-lg shadow-md border border-slate-200 p-1">
           <button
             onClick={onToggleChatSidebar}
             className={`p-2 rounded ${isChatSidebarOpen ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
@@ -1801,6 +2035,24 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
       {/* Control Buttons - Bottom Left - Vertically Stacked Groups */}
       <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-2">
+        {/* View Mode Toggle (Panel vs Modal) */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+          <button
+            onClick={() => setViewMode('panel')}
+            className={`p-2 rounded ${viewMode === 'panel' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Side Panel View"
+          >
+            <PanelRight className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setViewMode('modal')}
+            className={`p-2 rounded ${viewMode === 'modal' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            title="Center Modal View"
+          >
+            <Maximize className="w-5 h-5" />
+          </button>
+        </div>
+
         {/* Layout Mode Group */}
         <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
           <button
@@ -1891,6 +2143,21 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       {/* Summary Tooltip */}
       {hoveredSummary && (
         <Tooltip content={hoveredSummary} position={tooltipPosition} />
+      )}
+
+      {/* Center Modal for conversation (when viewMode is 'modal') */}
+      {modalData && modalData.isOpen && (
+        <NodeConversationModal
+          isOpen={modalData.isOpen}
+          messages={modalData.messages}
+          nodeLabel={modalData.label}
+          citations={modalData.citations}
+          onClose={() => setModalData(null)}
+          onSendMessage={onNodeMessage ? (msg: string) => onNodeMessage(modalData.nodeId, msg) : undefined}
+          isStreaming={isNodeStreaming}
+          statusMessage={nodeStatusMessage}
+          clickPosition={modalData.clickPosition}
+        />
       )}
     </div>
   );

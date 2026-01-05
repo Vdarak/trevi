@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { Menu, Map as MapIcon, MessageSquare } from 'lucide-react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
@@ -36,6 +37,10 @@ export default function Home() {
   // Chat sidebar state (full conversation)
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+
+  // Mobile state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'graph' | 'chat'>('graph');
 
   // Pending chats for optimistic UI (SWR pattern)
   const [pendingChats, setPendingChats] = useState<Array<{ id: string, name: string, isLoading: boolean }>>([]);
@@ -300,6 +305,53 @@ export default function Home() {
     setCurrentNodeId(nodeId);
   }, []);
 
+  // State for node conversation panel streaming
+  const [isNodeStreaming, setIsNodeStreaming] = useState(false);
+  const [nodeStatusMessage, setNodeStatusMessage] = useState('');
+
+  // Handle sending a message from node conversation panel (uses query mode)
+  const handleNodeMessage = useCallback(async (nodeId: string, message: string) => {
+    if (!currentChatId || isNodeStreaming) return;
+
+    setIsNodeStreaming(true);
+    setNodeStatusMessage("Connecting...");
+
+    try {
+      const request = createFollowUpRequest(message, currentChatId, nodeId);
+
+      await sendMessage(
+        request,
+        (update) => {
+          setNodeStatusMessage(update.message);
+        },
+        (event) => {
+          // Update current node to the new response node
+          setCurrentNodeId(event.node_id);
+
+          // Refresh graph to get updated data
+          getGraph(event.chat_id)
+            .then((graphResponse) => {
+              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              setGraphNodes(nodes);
+            })
+            .catch(console.error);
+
+          setIsNodeStreaming(false);
+          setNodeStatusMessage("");
+        },
+        (error) => {
+          console.error("Node message error:", error);
+          setNodeStatusMessage(`Error: ${error.error}`);
+          setIsNodeStreaming(false);
+        }
+      );
+    } catch (error) {
+      console.error("Failed to send node message:", error);
+      setNodeStatusMessage("Failed to send message");
+      setIsNodeStreaming(false);
+    }
+  }, [currentChatId, isNodeStreaming]);
+
   // Persist active node to localStorage when it changes
   useEffect(() => {
     if (currentChatId && currentNodeId) {
@@ -319,6 +371,22 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
+      {/* Mobile Header - visible on mobile */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between md:hidden">
+        <button
+          onClick={() => setIsMobileSidebarOpen(true)}
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <span className="font-semibold text-slate-800 truncate mx-4">
+          {showGraphPage 
+            ? (graphNodes.find(n => n.id === rootNodeId)?.label || 'Knowledge Graph')
+            : 'Trevi'}
+        </span>
+        <div className="w-9" /> {/* Spacer for centering */}
+      </div>
+
       {/* Left Sidebar - Knowledge Spaces */}
       <Sidebar
         selectedChatId={currentChatId}
@@ -328,25 +396,63 @@ export default function Home() {
         onChatDeleted={handleLogoClick}
         isCreatingChat={isCreatingChat}
         pendingChats={pendingChats}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area - flexes to accommodate right sidebar */}
-      <main className="flex-1 flex h-full relative overflow-hidden">
+      <main className="flex-1 flex flex-col md:flex-row h-full relative overflow-hidden pt-14 md:pt-0">
+        {/* Mobile Tab Bar - bottom navigation */}
+        {showGraphPage && (
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
+              <button
+                onClick={() => setMobileActiveTab('graph')}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                  mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
+                }`}
+              >
+                <MapIcon className="w-5 h-5" />
+                <span className="text-xs font-medium">Graph</span>
+              </button>
+              <button
+                onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                  mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
+                }`}
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span className="text-xs font-medium">Chat</span>
+              </button>
+          </div>
+        )}
+
         {/* Graph/Content Area */}
-        <div className="flex-1 h-full overflow-hidden relative">
+        <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
             <GraphLoading />
           ) : showGraphPage ? (
-            <KnowledgeGraph
-              nodes={graphNodes}
-              rootNodeId={rootNodeId || undefined}
-              onNodeClick={handleNodeClick}
-              onDirectionClick={handleDirectionClick}
-              loadingNodeId={loadingNodeId}
-              onToggleChatSidebar={toggleChatSidebar}
-              isChatSidebarOpen={isChatSidebarOpen}
-              initialActiveNodeId={currentNodeId}
-            />
+            // On mobile, show either graph or chat based on tab
+            <div className={`h-full ${mobileActiveTab === 'chat' ? 'hidden md:block' : ''}`}>
+              <KnowledgeGraph
+                nodes={graphNodes}
+                rootNodeId={rootNodeId || undefined}
+                onNodeClick={handleNodeClick}
+                onDirectionClick={handleDirectionClick}
+                loadingNodeId={loadingNodeId}
+                onToggleChatSidebar={toggleChatSidebar}
+                isChatSidebarOpen={isChatSidebarOpen}
+                initialActiveNodeId={currentNodeId}
+                onNodeMessage={handleNodeMessage}
+                isNodeStreaming={isNodeStreaming}
+                nodeStatusMessage={nodeStatusMessage}
+                globalStatus={{
+                  isActive: isStreaming || isLoading,
+                  message: statusMessage || 'Exploring...',
+                  type: isStreaming ? 'streaming' : 'exploring',
+                  activeNodeLabel: graphNodes.find(n => n.id === currentNodeId)?.label
+                }}
+              />
+            </div>
           ) : (
             <ChatInterface
               onSendMessage={handleSendMessage}
@@ -356,18 +462,24 @@ export default function Home() {
           )}
         </div>
 
-        {/* Right Sidebar - Full Conversation (push style) */}
-        <ChatSidebar
-          isOpen={isChatSidebarOpen}
-          conversationNodes={conversationNodes}
-          threadNodes={threadNodes}
-          rootLabel={graphNodes.find(n => n.id === rootNodeId)?.label || 'Conversation'}
-          activeLabel={graphNodes.find(n => n.id === currentNodeId)?.label}
-          isStreaming={isStreaming}
-          statusMessage={statusMessage}
-          onSendMessage={handleSidebarMessage}
-          onClose={() => setIsChatSidebarOpen(false)}
-        />
+        {/* Right Sidebar - Full Conversation (push style on desktop, full screen on mobile) */}
+        <div className={`
+          ${mobileActiveTab === 'chat' && showGraphPage ? 'flex md:flex' : 'hidden md:flex'}
+          ${isChatSidebarOpen ? 'md:flex' : 'md:hidden'}
+        `}>
+          <ChatSidebar
+            isOpen={isChatSidebarOpen || (mobileActiveTab === 'chat' && showGraphPage)}
+            conversationNodes={conversationNodes}
+            threadNodes={threadNodes}
+            rootLabel={graphNodes.find(n => n.id === rootNodeId)?.label || 'Conversation'}
+            activeLabel={graphNodes.find(n => n.id === currentNodeId)?.label}
+            activeNodeId={currentNodeId}
+            isStreaming={isStreaming}
+            statusMessage={statusMessage}
+            onSendMessage={handleSidebarMessage}
+            onClose={() => { setIsChatSidebarOpen(false); setMobileActiveTab('graph'); }}
+          />
+        </div>
       </main>
     </div>
   );

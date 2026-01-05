@@ -176,6 +176,18 @@ body {
   transform-origin: left center;
 }
 
+/* Modal scale-in animation - origin set dynamically via inline style */
+@keyframes modal-scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Rotating border animation for loading nodes */
 @keyframes border-spin {
   0% {
@@ -227,4 +239,18 @@ body {
 
 .react-flow__node {
   cursor: pointer !important;
+}
+
+/* Mobile slide-in animation for sidebar */
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.2s ease-out;
 }

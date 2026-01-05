@@ -185,14 +185,16 @@ export async function getGraph(chatId: string): Promise<GraphResponse> {
 
 /**
  * Converts GraphResponse into GraphNode array for the KnowledgeGraph component.
+ * Supports multiple root nodes (multiple independent graphs).
  */
 export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
   nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }>;
   currentNodeId: string;
-  rootNodeId: string | null;
+  rootNodeId: string | null; // Primary root (first found) for backwards compatibility
+  rootNodeIds: string[]; // All root nodes for multi-graph support
 } {
   const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }> = [];
-  let rootNodeId: string | null = null;
+  const rootNodeIds: string[] = [];
 
   // Build a map of node ID to parent ID from edges
   const parentMap = new Map<string, string>();
@@ -219,16 +221,17 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
       citations: nodeData.citations,
     });
 
-    // Find root node (parent is "root" or no parent)
+    // Collect all root nodes (parent is "root" or no parent)
     if (parentId === "root" || !parentId) {
-      rootNodeId = nodeData.id;
+      rootNodeIds.push(nodeData.id);
     }
   });
 
   return {
     nodes,
     currentNodeId: graphResponse.current_node,
-    rootNodeId,
+    rootNodeId: rootNodeIds[0] || null, // Primary root for backwards compatibility
+    rootNodeIds, // All roots for multi-graph support
   };
 }
 

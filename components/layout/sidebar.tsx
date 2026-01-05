@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
@@ -22,6 +22,8 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onChatDeleted?: () => void;
   isCreatingChat?: boolean;
   pendingChats?: PendingChat[]; // Chats currently being generated
+  isMobileOpen?: boolean; // Mobile menu open state
+  onMobileClose?: () => void; // Close mobile menu
 }
 
 export function Sidebar({
@@ -33,6 +35,8 @@ export function Sidebar({
   onChatDeleted,
   isCreatingChat,
   pendingChats = [],
+  isMobileOpen = false,
+  onMobileClose,
   ...props
 }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -82,16 +86,57 @@ export function Sidebar({
     }
   };
 
+  // Handle chat select on mobile - close sidebar after selection
+  const handleChatSelectMobile = (chatId: string) => {
+    onChatSelect?.(chatId);
+    onMobileClose?.();
+  };
+
+  // Handle new chat on mobile - close sidebar
+  const handleNewChatMobile = () => {
+    onNewChat?.();
+    onMobileClose?.();
+  };
+
   return (
-    <div className={cn("w-64 border-r border-slate-200 bg-slate-50/40 h-screen flex flex-col", className)} {...props}>
-      {/* Logo - clickable to go home */}
+    <>
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Sidebar */}
       <div
-        className="px-6 py-6 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-        onClick={onLogoClick}
+        className={cn(
+          // Base styles
+          "bg-slate-50/95 backdrop-blur-sm h-screen flex flex-col border-r border-slate-200",
+          // Desktop: always visible, fixed width
+          "hidden md:flex md:w-64 md:relative md:flex-shrink-0",
+          // Mobile: slide-in drawer
+          isMobileOpen && "fixed inset-y-0 left-0 w-72 z-50 flex md:hidden shadow-xl animate-slide-in-left",
+          className
+        )}
+        {...props}
       >
-        <Image src="/logo.svg" alt="Trevi Logo" width={32} height={32} className="dark:invert" />
-        <span className="text-xl font-bold tracking-tight text-slate-900">trevi</span>
-      </div>
+        {/* Mobile close button */}
+        <button
+          onClick={onMobileClose}
+          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 md:hidden"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Logo - clickable to go home */}
+        <div
+          className="px-6 py-6 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => { onLogoClick?.(); onMobileClose?.(); }}
+        >
+          <Image src="/logo.svg" alt="Trevi Logo" width={32} height={32} className="dark:invert" />
+          <span className="text-xl font-bold tracking-tight text-slate-900">trevi</span>
+        </div>
 
       <div className="px-6 mb-4">
         <p className="text-sm text-slate-500 mb-4">
@@ -102,7 +147,7 @@ export function Sidebar({
       {/* New Chat Button */}
       <div className="px-4 mb-2">
         <Button
-          onClick={onNewChat}
+          onClick={handleNewChatMobile}
           className="w-full justify-start gap-2 bg-slate-900 hover:bg-slate-800 text-white"
         >
           <Plus className="w-4 h-4" />
@@ -116,19 +161,28 @@ export function Sidebar({
             Topic Trees
           </h2>
           <div className="space-y-1">
-            {/* Show pending chats with optimistic names */}
+            {/* Show pending chats with optimistic names - styled like regular chats */}
             {pendingChats.map((pending) => (
-              <Button
+              <div
                 key={pending.id}
-                variant="ghost"
-                className="w-full justify-start text-slate-500 font-normal italic h-auto py-2"
-                disabled={pending.isLoading}
+                className="relative group"
               >
-                <div className="flex items-center gap-2 w-full">
-                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                  <span className="text-sm truncate">{pending.name}</span>
-                </div>
-              </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start font-normal h-auto py-2 text-left pr-10 bg-blue-50/50 border border-blue-100"
+                  disabled={pending.isLoading}
+                >
+                  <div className="flex flex-col items-start w-full">
+                    <span className="text-sm text-slate-600 truncate w-full">
+                      {pending.name}
+                    </span>
+                    <span className="text-xs text-blue-500 flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                      Creating...
+                    </span>
+                  </div>
+                </Button>
+              </div>
             ))}
 
             {loading ? (
@@ -149,7 +203,7 @@ export function Sidebar({
                       "w-full justify-start font-normal h-auto py-2 text-left pr-10",
                       selectedChatId === chat.chat_id && "bg-slate-200"
                     )}
-                    onClick={() => onChatSelect?.(chat.chat_id)}
+                    onClick={() => handleChatSelectMobile(chat.chat_id)}
                   >
                     <div className="flex flex-col items-start w-full">
                       <span className="text-sm text-slate-700 truncate w-full">
@@ -186,6 +240,7 @@ export function Sidebar({
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
+    </>
   );
 }
 
