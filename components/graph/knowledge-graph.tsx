@@ -1575,6 +1575,35 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     // Store the pending camera focus - will be handled after layout updates
     pendingCameraFocusRef.current = { nodeId, isExpanding: isCurrentlyCollapsed };
 
+    // If COLLAPSING (not currently collapsed, about to collapse)
+    if (!isCurrentlyCollapsed) {
+      // Get all descendants that will be hidden
+      const descendantEdges = graphNodes
+        .filter((n) => n.parentId && n.parentId !== "root")
+        .map((n) => ({ id: `e-${n.parentId}-${n.id}`, source: n.parentId!, target: n.id }));
+      const descendants = getDescendants(nodeId, descendantEdges);
+      
+      // Close any conversation panels for this node or its descendants
+      setNodes(nds => nds.filter(n => {
+        if (n.type !== 'conversationPanel') return true;
+        // Panel id format is `panel-{nodeId}`
+        const panelNodeId = n.id.replace('panel-', '');
+        return panelNodeId !== nodeId && !descendants.has(panelNodeId);
+      }));
+      setEdges(eds => eds.filter(e => {
+        if (!e.id.startsWith('panel-edge-')) return true;
+        const edgeNodeId = e.id.replace('panel-edge-', '');
+        return edgeNodeId !== nodeId && !descendants.has(edgeNodeId);
+      }));
+      
+      // If active node is this node or a descendant, transfer highlight to this node (the parent that's collapsing)
+      if (activeNodeId && (activeNodeId === nodeId || descendants.has(activeNodeId))) {
+        setActiveNodeId(nodeId);
+        // Also notify parent to update global status indicator and other state
+        onNodeClick?.(nodeId);
+      }
+    }
+
     // Update collapse state (triggers layout recalculation)
     setCollapsedNodes((prev) => {
       const next = new Set(prev);
@@ -1585,7 +1614,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       }
       return next;
     });
-  }, [collapsedNodes]);
+  }, [collapsedNodes, graphNodes, activeNodeId, setNodes, setEdges, onNodeClick]);
 
   // Handle camera animation AFTER layout has updated
   useEffect(() => {
@@ -2134,7 +2163,25 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         onMove={(_, vp) => setViewport(vp)}
       >
         <MiniMap
-          nodeColor={(node) => node.data?.isRoot ? "#0f172a" : "#e2e8f0"}
+          nodeColor={(node) => {
+            // Active node gets bright blue
+            if (node.data?.isActiveNode) return "#3b82f6";
+            // Nodes in the active path get a lighter blue
+            if (node.data?.isInActivePath) return "#93c5fd";
+            // Root node gets dark color
+            if (node.data?.isRoot) return "#0f172a";
+            // Default nodes
+            return "#e2e8f0";
+          }}
+          nodeStrokeColor={(node) => {
+            // Active node gets blue stroke
+            if (node.data?.isActiveNode) return "#1d4ed8";
+            // Path nodes get light blue stroke
+            if (node.data?.isInActivePath) return "#3b82f6";
+            // Others get subtle stroke
+            return "#cbd5e1";
+          }}
+          nodeStrokeWidth={2}
           maskColor="rgba(0,0,0,0.1)"
         />
         <Background color="#e2e8f0" gap={20} size={1} />
