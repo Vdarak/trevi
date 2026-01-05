@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Citation } from '@/lib/api';
 
 interface MessageBubbleProps {
@@ -37,6 +37,42 @@ export function MessageBubble({ role, content, isStreaming, citations }: Message
                 </div>
             )}
         </div>
+    );
+}
+
+/**
+ * Citation tooltip with CSS hover - simple and reliable.
+ */
+function SmartCitationTooltip({
+    index,
+    title,
+    content
+}: {
+    index: string;
+    title: string;
+    content: string;
+}) {
+    return (
+        <span className="inline-flex items-baseline relative group/cite cursor-pointer">
+            <sup className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[10px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors leading-none">
+                {index}
+            </sup>
+            {/* Tooltip - CSS hover, positioned above */}
+            <div
+                className="invisible group-hover/cite:visible opacity-0 group-hover/cite:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-64 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden"
+                style={{ zIndex: 99999 }}
+            >
+                <div className="max-h-32 overflow-y-auto px-3 py-2 text-[11px] text-slate-700 leading-relaxed">
+                    <div dangerouslySetInnerHTML={{ __html: formatSnippetContent(content) }} />
+                </div>
+                <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center gap-1.5">
+                    <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <span className="text-[10px] text-slate-500 truncate font-medium">{title}</span>
+                </div>
+            </div>
+        </span>
     );
 }
 
@@ -119,37 +155,12 @@ function renderMarkdownWithCitations(content: string, citations?: Citation[]): R
                 const tooltipContent = snippet || citation.title;
 
                 elements.push(
-                    <span
+                    <SmartCitationTooltip
                         key={`cite-${i}`}
-                        className="inline-flex items-baseline relative group cursor-pointer"
-                    >
-                        <sup className="inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[10px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors leading-none">
-                            {citation.index}
-                        </sup>
-                        {/* Dialog-style tooltip with header, scrollable content, and footer */}
-                        <div
-                            className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
-                            style={{ zIndex: 99999 }}
-                        >
-                            {/* Scrollable content area */}
-                            <div className="max-h-48 overflow-y-auto px-4 py-3 text-xs text-slate-700 leading-relaxed">
-                                <div
-                                    dangerouslySetInnerHTML={{
-                                        __html: formatSnippetContent(tooltipContent)
-                                    }}
-                                />
-                            </div>
-                            {/* Footer with source title */}
-                            <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
-                                <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                </svg>
-                                <span className="text-xs text-slate-500 truncate font-medium">
-                                    {citation.title}
-                                </span>
-                            </div>
-                        </div>
-                    </span>
+                        index={citation.index}
+                        title={citation.title}
+                        content={tooltipContent}
+                    />
                 );
             }
         }

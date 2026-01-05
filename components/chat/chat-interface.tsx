@@ -16,10 +16,10 @@ interface ChatInterfaceProps {
 // Audio level visualizer bars component
 function AudioLevelBars({ level, isActive }: { level: number; isActive: boolean }) {
   const barCount = 5;
-  
+
   // Use slightly different multipliers for each bar to create variation
   const barMultipliers = [0.6, 0.9, 1.0, 0.85, 0.7];
-  
+
   return (
     <div className="flex items-center justify-center gap-0.5 h-5">
       {Array.from({ length: barCount }).map((_, i) => {
@@ -29,13 +29,12 @@ function AudioLevelBars({ level, isActive }: { level: number; isActive: boolean 
         const minHeight = 4;
         const maxHeight = 16;
         const dynamicHeight = minHeight + (barLevel * (maxHeight - minHeight));
-        
+
         return (
           <div
             key={i}
-            className={`w-1 rounded-full transition-all duration-100 ease-out ${
-              isActive ? 'bg-red-500' : 'bg-slate-400'
-            }`}
+            className={`w-1 rounded-full transition-all duration-100 ease-out ${isActive ? 'bg-red-500' : 'bg-slate-400'
+              }`}
             style={{
               height: `${dynamicHeight}px`,
             }}
@@ -50,7 +49,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
   const [message, setMessage] = useState("");
   // Track what user typed before starting voice
   const preVoiceTextRef = React.useRef("");
-  
+
   const {
     isListening,
     isSupported,
@@ -95,7 +94,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       alert('Voice dictation is not supported in your browser. Please use Chrome, Edge, or Safari.');
       return;
     }
-    
+
     if (!isListening) {
       // Save current text before starting voice dictation
       preVoiceTextRef.current = message.trim();
@@ -103,7 +102,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       // Clear the ref when stopping
       preVoiceTextRef.current = "";
     }
-    
+
     toggleListening();
   };
 
@@ -136,28 +135,27 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
             <AudioLevelBars level={audioLevel} isActive={isListening} />
           </div>
         )}
-        
-        <Input 
-          placeholder={isListening ? "Speak now..." : "Start typing..."} 
-          className={`h-14 pl-6 pr-24 rounded-full shadow-sm text-lg text-slate-900 transition-all ${
-            isListening 
-              ? 'border-red-300 ring-2 ring-red-100' 
-              : 'border-slate-200'
-          }`}
+
+        <Input
+          placeholder={isListening ? "Speak now..." : "Start typing..."}
+          className={`h-14 pl-6 pr-24 rounded-full shadow-sm text-lg text-slate-900 transition-all ${isListening
+            ? 'border-red-300 ring-2 ring-red-100'
+            : 'border-slate-200'
+            }`}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           disabled={isLoading}
+          autoFocus
         />
         <div className="absolute right-2 top-2 flex items-center gap-1">
-          <Button 
+          <Button
             type="button"
-            size="icon" 
-            variant="ghost" 
-            className={`rounded-full transition-all ${
-              isListening 
-                ? 'bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700' 
-                : 'text-slate-500 hover:text-slate-900'
-            }`}
+            size="icon"
+            variant="ghost"
+            className={`rounded-full transition-all ${isListening
+              ? 'bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700'
+              : 'text-slate-500 hover:text-slate-900'
+              }`}
             disabled={isLoading}
             onClick={handleMicClick}
             title={isListening ? 'Stop dictation' : 'Start voice dictation'}
@@ -172,9 +170,9 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
               <Mic className="w-5 h-5" />
             )}
           </Button>
-          <Button 
+          <Button
             type="submit"
-            size="icon" 
+            size="icon"
             className="rounded-full bg-slate-900 hover:bg-slate-800"
             disabled={isLoading || !message.trim()}
           >
@@ -205,19 +203,19 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       {/* Suggestions */}
       {!isLoading && !isListening && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-          <Card 
+          <Card
             className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
             onClick={() => handleSuggestionClick("What will be the weather tomorrow")}
           >
             <p className="text-sm font-medium text-slate-700">What will be the weather tomorrow</p>
           </Card>
-          <Card 
+          <Card
             className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
             onClick={() => handleSuggestionClick("How does rocket ships work in general")}
           >
             <p className="text-sm font-medium text-slate-700">How does rocket ships work in general</p>
           </Card>
-          <Card 
+          <Card
             className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
             onClick={() => handleSuggestionClick("Corresponding grammatical structure")}
           >

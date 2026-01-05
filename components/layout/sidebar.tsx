@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
@@ -99,10 +99,21 @@ export function Sidebar({
         </p>
       </div>
 
+      {/* New Chat Button */}
+      <div className="px-4 mb-2">
+        <Button
+          onClick={onNewChat}
+          className="w-full justify-start gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+        >
+          <Plus className="w-4 h-4" />
+          New Chat
+        </Button>
+      </div>
+
       <div className="space-y-4 py-4 flex-1 overflow-y-auto">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight flex items-center gap-2 text-slate-800">
-            Knowledge Spaces
+            Topic Trees
           </h2>
           <div className="space-y-1">
             {/* Show pending chats with optimistic names */}
