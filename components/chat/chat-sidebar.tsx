@@ -161,7 +161,7 @@ export function ChatSidebar({
             </div>
 
             {/* Messages Area */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4">
                 <div ref={messagesTopRef} />
                 {activeTab === 'bibliography' ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm">

@@ -106,7 +106,7 @@ export function Sidebar({
           className="w-full justify-start gap-2 bg-slate-900 hover:bg-slate-800 text-white"
         >
           <Plus className="w-4 h-4" />
-          New Chat
+          New Topic
         </Button>
       </div>
 

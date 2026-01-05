@@ -117,9 +117,9 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
   return (
     <div className="flex flex-col items-center justify-center h-full max-w-3xl mx-auto px-4 w-full">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold tracking-tight mb-4 text-slate-900">Understand Anything</h1>
+        <h1 className="text-4xl font-bold tracking-tight mb-4 text-slate-900">Explore Anything</h1>
         <p className="text-slate-500 text-lg">
-          Research on any topics or brainstorm ideas.
+          Research and explore any topic.
         </p>
       </div>
 

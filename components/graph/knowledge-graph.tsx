@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ReactFlow,
   MiniMap,
@@ -14,6 +15,7 @@ import {
   Edge,
   Position,
   Handle,
+  MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass } from 'lucide-react';
@@ -378,6 +380,8 @@ interface ConceptNodeData {
   label: string;
   summary?: string;
   isHighlighted?: boolean;
+  isInActivePath?: boolean; // Part of the path from active node to root
+  isActiveNode?: boolean; // The currently clicked/active node
   isRoot?: boolean;
   isCollapsed?: boolean;
   hasChildren?: boolean;
@@ -448,36 +452,148 @@ function findSnippetForCitation(citationIndex: number, citations?: Citation[]): 
   return snippet && snippet !== "Source paragraph not found" ? snippet : null;
 }
 
-// Citation tooltip component - simple CSS hover approach
+// Citation tooltip component - uses portal for proper positioning outside overflow containers
 function CitationTooltipGraph({
   index,
   content,
-  title = 'Source'
+  title = 'Source',
+  url
 }: {
   index: string;
   content: string;
   title?: string;
+  url?: string;
 }) {
+  const triggerRef = useRef<HTMLElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number; side: 'top' | 'bottom'; ready: boolean } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Only render portal on client side
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
+
+  // Handle hover with debounce
+  const handleMouseEnter = useCallback(() => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setIsVisible(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    // Debounce hide by 150ms so user can move to tooltip
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsVisible(false);
+      setPosition(null);
+    }, 150);
+  }, []);
+
+  // Calculate position when tooltip becomes visible
+  useLayoutEffect(() => {
+    if (!isVisible || !triggerRef.current || !tooltipRef.current) return;
+
+    const triggerRect = triggerRef.current.getBoundingClientRect();
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const padding = 8;
+    const offset = 6;
+
+    let x = triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+    let y: number;
+    let side: 'top' | 'bottom' = 'top';
+
+    // Try above first
+    const topY = triggerRect.top - tooltipRect.height - offset;
+    const bottomY = triggerRect.bottom + offset;
+
+    if (topY >= padding) {
+      y = topY;
+      side = 'top';
+    } else if (bottomY + tooltipRect.height <= vh - padding) {
+      y = bottomY;
+      side = 'bottom';
+    } else {
+      const spaceAbove = triggerRect.top;
+      const spaceBelow = vh - triggerRect.bottom;
+      if (spaceAbove >= spaceBelow) {
+        y = padding;
+        side = 'top';
+      } else {
+        y = vh - tooltipRect.height - padding;
+        side = 'bottom';
+      }
+    }
+
+    x = Math.max(padding, Math.min(x, vw - tooltipRect.width - padding));
+    
+    // Use requestAnimationFrame to ensure we set ready after the browser has painted
+    requestAnimationFrame(() => {
+      setPosition({ x, y, side, ready: true });
+    });
+  }, [isVisible]);
+
+  // Handle click to open URL
+  const handleClick = useCallback(() => {
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }, [url]);
+
   return (
-    <span className="inline-flex items-baseline relative group/cite cursor-pointer">
-      <sup className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors leading-none">
+    <span 
+      ref={triggerRef as React.RefObject<HTMLSpanElement>}
+      className="cursor-pointer"
+      style={{ verticalAlign: 'super', display: 'inline', margin: '0 1px' }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
+    >
+      <span className="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors" style={{ verticalAlign: 'super' }}>
         {index}
-      </sup>
-      {/* Tooltip - CSS hover, positioned above */}
-      <div
-        className="invisible group-hover/cite:visible opacity-0 group-hover/cite:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-1 w-56 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden"
-        style={{ zIndex: 99999 }}
-      >
-        <div className="max-h-28 overflow-y-auto px-2.5 py-2 text-[10px] text-slate-700 leading-relaxed">
-          {content}
-        </div>
-        <div className="px-2.5 py-1 bg-slate-50 border-t border-slate-100 flex items-center gap-1">
-          <svg className="w-2.5 h-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-          </svg>
-          <span className="text-[9px] text-slate-500 truncate font-medium">{title}</span>
-        </div>
-      </div>
+      </span>
+      {/* Tooltip rendered via portal to escape overflow containers */}
+      {mounted && isVisible && createPortal(
+        <div
+          ref={tooltipRef}
+          className="fixed w-56 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden pointer-events-auto"
+          style={{ 
+            // Render off-screen initially for measurement, then move to position
+            left: position?.ready ? position.x : -9999,
+            top: position?.ready ? position.y : -9999,
+            zIndex: 99999,
+            opacity: position?.ready ? 1 : 0,
+            transform: position?.ready 
+              ? 'scale(1) translateY(0)' 
+              : `scale(0.95) translateY(${position?.side === 'bottom' ? '-4px' : '4px'})`,
+            transition: position?.ready ? 'opacity 150ms ease-out, transform 150ms ease-out' : 'none',
+          }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div 
+            className="overflow-y-auto px-2.5 py-2 text-[10px] text-slate-700 leading-relaxed"
+            style={{ maxHeight: '120px', scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
+          >
+            {content}
+          </div>
+          <div className="px-2.5 py-1 bg-slate-50 border-t border-slate-100 flex items-center gap-1">
+            <svg className="w-2.5 h-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <span className="text-[9px] text-slate-500 truncate font-medium">{title}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </span>
   );
 }
@@ -487,22 +603,32 @@ function CitationTooltipGraph({
 
 // Simple markdown renderer for conversation messages with citation support
 function renderSimpleMarkdown(text: string, citationsData?: Citation[]): React.ReactNode {
-  // FIRST: Protect markdown links by replacing them with placeholders
+  let processedText = text;
+
+  // FIRST: Handle standalone reference numbers [n] BEFORE other processing
+  // This prevents them from being captured by other patterns
+  processedText = processedText.replace(/\[\s*(\d+)\s*\]/g, '__REF_$1__');
+
+  // SECOND: Protect markdown links by replacing them with placeholders
   const links: { text: string; url: string }[] = [];
-  let processedText = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+  processedText = processedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
     links.push({ text: linkText, url });
     return `__LINK_${links.length - 1}__`;
   });
 
-  // SECOND: Extract citations [index: title] - must have colon
+  // THIRD: Extract citations [index: title] - must have colon
+  // Also remove any parenthesized URL immediately following the citation
   const extractedCitations: { index: string; title: string }[] = [];
-  processedText = processedText.replace(/\[(\d+):\s*([^\]]+)\]/g, (match, index, title) => {
+  processedText = processedText.replace(/\[(\d+):\s*([^\]]+)\](?:\s*\([^)]+\))?/g, (match, index, title) => {
     extractedCitations.push({ index, title: title.trim() });
     return `__CITATION_${extractedCitations.length - 1}__`;
   });
 
-  // THIRD: Handle standalone reference numbers [n]
-  processedText = processedText.replace(/\[(\d+)\]/g, '<sup class="text-blue-600 font-medium text-[9px]">[$1]</sup>');
+  // Also strip any remaining standalone parenthesized URLs (http/https links in parentheses)
+  processedText = processedText.replace(/\s*\(https?:\/\/[^)]+\)/g, '');
+
+  // FOURTH: Restore standalone reference numbers as styled bubbles
+  processedText = processedText.replace(/__REF_(\d+)__/g, '<span class="inline-flex items-center justify-center min-w-[14px] h-[14px] px-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 rounded cursor-pointer" style="vertical-align: super; margin: 0 1px;">$1</span>');
 
   // Handle bold **text**
   processedText = processedText.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -549,12 +675,16 @@ function renderSimpleMarkdown(text: string, citationsData?: Citation[]): React.R
         const citationNumber = parseInt(citation.index, 10);
         const snippet = findSnippetForCitation(citationNumber, citationsData);
         const tooltipContent = snippet || citation.title;
+        // Find URL from citations data
+        const citationData = citationsData?.find(c => c.index === citationNumber);
+        const citationUrl = citationData?.url;
 
         elements.push(
           <CitationTooltipGraph
             key={`cite-${i}`}
             index={citation.index}
             content={tooltipContent}
+            url={citationUrl}
           />
         );
       }
@@ -626,18 +756,24 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
       {/* Main node box */}
       <div
         className={`
-          relative ${sizeClass} ${borderClass} ${radiusClass} ${shadowClass} transition-all duration-200 flex items-center gap-3 whitespace-nowrap
+          relative ${sizeClass} ${radiusClass} ${shadowClass} transition-all duration-200 flex items-center gap-3 whitespace-nowrap
           ${data.isRoot
-            ? "bg-slate-900 text-white border-slate-900"
+            ? data.isInActivePath || data.isActiveNode
+              ? "bg-slate-900 text-white border-[3px] border-blue-500"
+              : "bg-slate-900 text-white border-[3px] border-slate-900"
             : data.isLoading
-              ? "bg-blue-50 border-blue-300"
+              ? "bg-blue-50 border-[3px] border-blue-300"
               : isClickableDirection
-                ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:border-blue-400 cursor-pointer hover:shadow-md"
-                : data.isHighlighted
-                  ? "bg-blue-50 border-blue-400 shadow-md"
-                  : isParentNode
-                    ? `bg-slate-50 border-slate-300 hover:border-slate-400`
-                    : "bg-white border-slate-200 hover:border-slate-300"
+                ? data.isInActivePath || data.isActiveNode
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-[3px] border-blue-500 cursor-pointer"
+                  : "bg-gradient-to-r from-blue-50 to-indigo-50 border-[3px] border-blue-200 hover:border-blue-400 cursor-pointer hover:shadow-md"
+                : data.isInActivePath || data.isActiveNode
+                  ? "bg-blue-50 border-[3px] border-blue-500"
+                  : data.isHighlighted
+                    ? "bg-blue-50 border-[3px] border-blue-400 shadow-md"
+                    : isParentNode
+                      ? `bg-slate-50 ${borderClass} border-slate-300 hover:border-slate-400`
+                      : `bg-white ${borderClass} border-slate-200 hover:border-slate-300`
           }
         `}
         onClick={(e) => {
@@ -647,8 +783,10 @@ function ConceptNode({ data, targetPosition, sourcePosition }: { data: ConceptNo
           }
         }}
       >
-        {/* Target Handle - always on the node */}
-        <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />
+        {/* Target Handle - not needed for root node (has no parent) */}
+        {!data.isRoot && (
+          <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />
+        )}
 
         {/* Loading animation - rotating explore icon */}
         {data.isLoading && !isClickableDirection && (
@@ -756,11 +894,17 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
     return assistantMessages.map(m => m.content).join('\n\n');
   }, [data.messages]);
 
+  // Prevent wheel events from propagating to React Flow (which would zoom the canvas)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.stopPropagation();
+  }, []);
+
   if (!aiContent) return null;
 
   return (
     <div
       className="w-[360px] max-h-[400px] bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden animate-scale-in"
+      onWheelCapture={handleWheel}
     >
       {/* Target Handle on left - for edge connection */}
       <Handle
@@ -783,7 +927,7 @@ function ConversationPanelNode({ data }: { data: ConversationPanelNodeData }) {
 
       {/* Scrollable AI content - clean reading experience */}
       <div
-        className="overflow-y-auto p-4 pr-8 text-sm text-slate-700 leading-relaxed"
+        className="overflow-y-auto overflow-x-hidden p-4 pr-8 text-sm text-slate-700 leading-relaxed"
         style={{ maxHeight: '400px', scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
       >
         {renderSimpleMarkdown(aiContent, data.citations)}
@@ -799,7 +943,7 @@ const nodeTypes = {
 } as const;
 
 // ============================================================================
-// Tooltip Component
+// Tooltip Component with Collision Detection
 // ============================================================================
 
 interface TooltipProps {
@@ -808,12 +952,65 @@ interface TooltipProps {
 }
 
 function Tooltip({ content, position }: TooltipProps) {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [adjustedPosition, setAdjustedPosition] = useState<{
+    x: number;
+    y: number;
+    side: 'top' | 'bottom';
+  }>({ x: position.x, y: position.y + 20, side: 'bottom' });
+
+  useLayoutEffect(() => {
+    if (!tooltipRef.current) return;
+
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const padding = 8; // Minimum distance from viewport edges
+    const offset = 12; // Distance from cursor
+
+    let x = position.x;
+    let y = position.y;
+    let side: 'top' | 'bottom' = 'bottom';
+
+    // Try placing below cursor first
+    const bottomY = position.y + offset;
+    const topY = position.y - tooltipRect.height - offset;
+
+    // Check if it fits below
+    if (bottomY + tooltipRect.height <= vh - padding) {
+      y = bottomY;
+      side = 'bottom';
+    } else if (topY >= padding) {
+      // Try above
+      y = topY;
+      side = 'top';
+    } else {
+      // Neither fits perfectly, use the one with more space
+      const spaceBelow = vh - position.y - offset;
+      const spaceAbove = position.y - offset;
+      if (spaceBelow >= spaceAbove) {
+        y = vh - tooltipRect.height - padding;
+        side = 'bottom';
+      } else {
+        y = padding;
+        side = 'top';
+      }
+    }
+
+    // Center horizontally, but clamp to viewport
+    x = position.x - tooltipRect.width / 2;
+    x = Math.max(padding, Math.min(x, vw - tooltipRect.width - padding));
+
+    setAdjustedPosition({ x, y, side });
+  }, [position.x, position.y]);
+
   return (
     <div
-      className="fixed z-[9999] max-w-xs px-4 py-1 bg-slate-800 text-white text-xs rounded shadow-lg pointer-events-none -translate-x-1/2"
+      ref={tooltipRef}
+      className="fixed z-[9999] max-w-xs px-3 py-1.5 bg-slate-800 text-white text-xs rounded-lg shadow-lg pointer-events-none"
       style={{
-        left: position.x,
-        top: position.y + 20,
+        left: adjustedPosition.x,
+        top: adjustedPosition.y,
       }}
     >
       {content}
@@ -1066,6 +1263,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     }
   }, [rootNodeId]);
 
+  // Sync activeNodeId with initialActiveNodeId prop when it changes (e.g., loading different chat)
+  useEffect(() => {
+    if (initialActiveNodeId !== undefined) {
+      setActiveNodeId(initialActiveNodeId);
+    }
+  }, [initialActiveNodeId]);
+
   // Auto-fit view when loading completes or new nodes are added
   useEffect(() => {
     const isLoading = !!loadingNodeId;
@@ -1260,6 +1464,71 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     return () => clearTimeout(timeoutId);
   }, [layoutedNodes, getNodes, childMap, fitBounds]); // Triggered when layout changes
 
+  // Compute active path for persistent highlighting (Option C approach)
+  // This ensures highlighting persists across all operations
+  const { activePathNodeIds, activePathEdgeIds, lastEdgeId } = useMemo(() => {
+    if (!activeNodeId) {
+      return { activePathNodeIds: new Set<string>(), activePathEdgeIds: new Set<string>(), lastEdgeId: null as string | null };
+    }
+    const { nodeIds, edgeIds } = findPathToRoot(activeNodeId, layoutedEdges, rootId);
+    // The last edge is the one that connects to the active node (target = activeNodeId)
+    const lastEdge = layoutedEdges.find(e => e.target === activeNodeId);
+    return { activePathNodeIds: nodeIds, activePathEdgeIds: edgeIds, lastEdgeId: lastEdge?.id || null };
+  }, [activeNodeId, layoutedEdges, rootId]);
+
+  // Effect to apply active path styling immediately when activeNodeId changes
+  // This ensures the highlighting persists across all operations
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    
+    // Update nodes with active path data
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.type === 'conversationPanel') return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            isInActivePath: activePathNodeIds.has(n.id),
+            isActiveNode: n.id === activeNodeId,
+          },
+        };
+      })
+    );
+
+    // Update edges with active path styling
+    setEdges((eds) =>
+      eds.map((e) => {
+        if (e.id.startsWith('panel-edge-')) return e;
+        
+        if (activePathEdgeIds.has(e.id)) {
+          const isLastEdge = e.id === lastEdgeId;
+          return {
+            ...e,
+            style: { stroke: "#3b82f6", strokeWidth: 3 },
+            animated: false,
+            zIndex: 1000,
+            ...(isLastEdge && {
+              markerEnd: {
+                type: MarkerType.Arrow,
+                color: "#3b82f6",
+                width: 15,
+                height: 15,
+              },
+            }),
+          };
+        }
+        return {
+          ...e,
+          style: { stroke: "#94a3b8", strokeWidth: 2 },
+          animated: false,
+          zIndex: 0,
+          markerEnd: undefined,
+        };
+      })
+    );
+  }, [activeNodeId, activePathNodeIds, activePathEdgeIds, lastEdgeId, setNodes, setEdges, nodes.length]);
+
   // Re-sync when layoutedNodes change - completely replace the nodes/edges arrays
   // We use useLayoutAnimation to handle the transition
   const nodesWithHandlers = useMemo(() => {
@@ -1273,17 +1542,43 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           ...node.data,
           isExpanded: expandedNodeId === node.id,
           messages: graphNode?.payload || [],
+          isInActivePath: activePathNodeIds.has(node.id),
+          isActiveNode: node.id === activeNodeId,
           onToggleCollapse: () => toggleCollapse(node.id),
           onDirectionClick: () => onDirectionClick?.(node.id),
           onCloseExpanded: () => setExpandedNodeId(null),
         },
       };
     });
-  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes]);
+  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes, activePathNodeIds, activeNodeId]);
+
+  // Compute edges with active path styling
+  const edgesWithActivePath = useMemo(() => {
+    return layoutedEdges.map((edge) => {
+      if (activePathEdgeIds.has(edge.id)) {
+        const isLastEdge = edge.id === lastEdgeId;
+        return {
+          ...edge,
+          style: { stroke: "#3b82f6", strokeWidth: 3 },
+          animated: false,
+          zIndex: 1000,
+          ...(isLastEdge && {
+            markerEnd: {
+              type: MarkerType.Arrow,
+              color: "#3b82f6",
+              width: 15,
+              height: 15,
+            },
+          }),
+        };
+      }
+      return edge;
+    });
+  }, [layoutedEdges, activePathEdgeIds, lastEdgeId]);
 
   useLayoutAnimation(
     nodesWithHandlers,
-    layoutedEdges,
+    edgesWithActivePath,
     setNodes,
     setEdges,
     useCallback(() => {
@@ -1302,25 +1597,26 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       setTooltipPosition({ x: event.clientX, y: event.clientY });
 
       const { nodeIds: hoverNodeIds, edgeIds: hoverEdgeIds } = findPathToRoot(node.id, edges, rootId);
+      // Find last edge for hover path (target = hovered node)
+      const hoverLastEdge = edges.find(e => e.target === node.id);
 
-      // Get active path if exists
-      const activePath = activeNodeId ? findPathToRoot(activeNodeId, edges, rootId) : { nodeIds: new Set<string>(), edgeIds: new Set<string>() };
-
-      // Update node highlighting (hover takes priority, but active also highlighted)
+      // Update node highlighting (hover takes priority)
       setNodes((nds) =>
         nds.map((n) => ({
           ...n,
-          data: { ...n.data, isHighlighted: hoverNodeIds.has(n.id) || activePath.nodeIds.has(n.id) },
+          data: { ...n.data, isHighlighted: hoverNodeIds.has(n.id) },
         }))
       );
 
-      // Update edge styling - hover path thickest, active path thick, others normal
+      // Update edge styling - hover path uses animated dashed style for distinction
       setEdges((eds) =>
         eds.map((e) => {
           if (e.id.startsWith('panel-edge-')) return e;
 
           const isHoverPath = hoverEdgeIds.has(e.id);
-          const isActivePath = activePath.edgeIds.has(e.id);
+          const isActivePath = activePathEdgeIds.has(e.id);
+          const isHoverLastEdge = e.id === hoverLastEdge?.id;
+          const isActiveLastEdge = e.id === lastEdgeId;
 
           if (isHoverPath) {
             return {
@@ -1328,13 +1624,23 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
               style: { stroke: "#3b82f6", strokeWidth: 5 },
               animated: true,
               zIndex: 1001,
+              markerEnd: undefined,
             };
           } else if (isActivePath) {
+            // Keep active path visible but dimmed during hover
             return {
               ...e,
-              style: { stroke: "#3b82f6", strokeWidth: 5 },
-              animated: true,
+              style: { stroke: "#93c5fd", strokeWidth: 3 },
+              animated: false,
               zIndex: 1000,
+              ...(isActiveLastEdge && {
+                markerEnd: {
+                  type: MarkerType.Arrow,
+                  color: "#93c5fd",
+                  width: 15,
+                  height: 15,
+                },
+              }),
             };
           }
           return {
@@ -1342,11 +1648,12 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             style: { stroke: "#e2e8f0", strokeWidth: 2 },
             animated: false,
             zIndex: 0,
+            markerEnd: undefined,
           };
         })
       );
     },
-    [edges, rootId, activeNodeId, setNodes, setEdges]
+    [edges, rootId, activePathEdgeIds, lastEdgeId, setNodes, setEdges]
   );
 
   // Track mouse movement for tooltip
@@ -1359,65 +1666,53 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const handleNodeMouseLeave = useCallback(() => {
     setHoveredNodeId(null);
 
-    // If there's an active node, revert to showing active path; otherwise clear all
-    if (activeNodeId) {
-      const { nodeIds, edgeIds } = findPathToRoot(activeNodeId, edges, rootId);
+    // Clear hover highlighting - active path highlighting is handled by the memo
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        data: { ...n.data, isHighlighted: false },
+      }))
+    );
 
-      setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: { ...n.data, isHighlighted: nodeIds.has(n.id) },
-        }))
-      );
+    // Restore edge styling based on active path
+    setEdges((eds) =>
+      eds.map((e) => {
+        if (e.id.startsWith('panel-edge-')) return e;
 
-      setEdges((eds) =>
-        eds.map((e) => {
-          if (e.id.startsWith('panel-edge-')) return e;
-
-          if (edgeIds.has(e.id)) {
-            return {
-              ...e,
-              style: { stroke: "#3b82f6", strokeWidth: 5 },
-              animated: true,
-              zIndex: 1000,
-            };
-          }
+        if (activePathEdgeIds.has(e.id)) {
+          const isLastEdge = e.id === lastEdgeId;
           return {
             ...e,
-            style: { stroke: "#94a3b8", strokeWidth: 2 },
+            style: { stroke: "#3b82f6", strokeWidth: 3 },
             animated: false,
-            zIndex: 0,
+            zIndex: 1000,
+            ...(isLastEdge && {
+              markerEnd: {
+                type: MarkerType.Arrow,
+                color: "#3b82f6",
+                width: 15,
+                height: 15,
+              },
+            }),
           };
-        })
-      );
-    } else {
-      // No active node, clear all highlighting
-      setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: { ...n.data, isHighlighted: false },
-        }))
-      );
-
-      setEdges((eds) =>
-        eds.map((e) => {
-          if (e.id.startsWith('panel-edge-')) return e;
-          return {
-            ...e,
-            style: { stroke: "#94a3b8", strokeWidth: 2 },
-            animated: false,
-            zIndex: 0,
-          };
-        })
-      );
-    }
-  }, [activeNodeId, edges, rootId, setNodes, setEdges]);
+        }
+        return {
+          ...e,
+          style: { stroke: "#94a3b8", strokeWidth: 2 },
+          animated: false,
+          zIndex: 0,
+          markerEnd: undefined,
+        };
+      })
+    );
+  }, [activePathEdgeIds, lastEdgeId, setNodes, setEdges]);
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
       onNodeClick?.(node.id);
 
       // Set this node as the active node for persistent path highlighting
+      // The memo will automatically compute and apply the active path styling
       setActiveNodeId(node.id);
 
       // Find the graph node data to check for messages
@@ -1426,35 +1721,6 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       // First, remove any existing panel node and its edge
       setNodes(nds => nds.filter(n => n.type !== 'conversationPanel'));
       setEdges(eds => eds.filter(e => !e.id.startsWith('panel-edge-')));
-
-      // Apply active path highlighting immediately
-      const { nodeIds, edgeIds } = findPathToRoot(node.id, edges, rootId);
-
-      setNodes((nds) =>
-        nds.filter(n => n.type !== 'conversationPanel').map((n) => ({
-          ...n,
-          data: { ...n.data, isHighlighted: nodeIds.has(n.id) },
-        }))
-      );
-
-      setEdges((eds) =>
-        eds.filter(e => !e.id.startsWith('panel-edge-')).map((e) => {
-          if (edgeIds.has(e.id)) {
-            return {
-              ...e,
-              style: { stroke: "#60a5fa", strokeWidth: 3 },
-              animated: true,
-              zIndex: 1000,
-            };
-          }
-          return {
-            ...e,
-            style: { stroke: "#94a3b8", strokeWidth: 2 },
-            animated: false,
-            zIndex: 0,
-          };
-        })
-      );
 
       if (graphNode?.payload && graphNode.payload.length > 0) {
         const nodeWidth = getNodeWidth(graphNode.label);
@@ -1507,7 +1773,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         setSelectedNodePanel(null);
       }
     },
-    [onNodeClick, graphNodes, edges, rootId, setNodes, setEdges]
+    [onNodeClick, graphNodes, setNodes, setEdges]
   );
 
   if (graphNodes.length === 0) {
