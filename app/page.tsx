@@ -367,7 +367,7 @@ export default function Home() {
   // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
   const showLoadingPage = isCreatingChat;
-  const showGraphPage = currentChatId && graphNodes.length > 0 && !isCreatingChat;
+  const showGraphPage = !!currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
@@ -477,7 +477,7 @@ export default function Home() {
             threadNodes={threadNodes}
             rootLabel={graphNodes.find(n => n.id === rootNodeId)?.label || 'Conversation'}
             activeLabel={graphNodes.find(n => n.id === currentNodeId)?.label}
-            activeNodeId={currentNodeId}
+            activeNodeId={currentNodeId || undefined}
             isStreaming={isStreaming}
             statusMessage={statusMessage}
             onSendMessage={handleSidebarMessage}
