@@ -26,7 +26,7 @@ export function GraphLoading() {
     <div className="flex flex-col items-center justify-center h-full w-full bg-white">
       {/* Trevi Logo Animation - Large */}
       <div className="mb-8">
-        <TreviLogoAnimation size={200} />
+        <TreviLogoAnimation size={300} />
       </div>
 
       {/* Loading message with fade transition */}

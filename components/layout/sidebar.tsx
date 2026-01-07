@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { Trash2, Plus, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { TreviSpinner } from '@/components/ui/trevi-logo';
+import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
@@ -135,7 +134,7 @@ export function Sidebar({
           className="px-6 py-6 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => { onLogoClick?.(); onMobileClose?.(); }}
         >
-          <Image src="/logo.svg" alt="Trevi Logo" width={32} height={32} className="dark:invert" />
+          <TreviLogoStatic size={32} />
           <span className="text-xl font-bold tracking-tight text-slate-900">trevi</span>
         </div>
 

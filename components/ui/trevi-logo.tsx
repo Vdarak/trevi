@@ -124,10 +124,6 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
             id="treviPath"
             d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
           />
-          <radialGradient id="ballGradient" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#fff" stopOpacity="1" />
-            <stop offset="100%" stopColor="#fff" stopOpacity="0.7" />
-          </radialGradient>
         </defs>
 
         {/* Animated reveal path */}
@@ -140,9 +136,9 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
           fill="none"
         />
 
-        {/* Main Ball with motion and scale animation */}
+        {/* Main Ball with motion and scale animation - solid white fill */}
         {animate && (
-          <circle r="0" fill="url(#ballGradient)">
+          <circle r="0" fill="#fff">
             <animateMotion 
               dur="5s" 
               repeatCount="indefinite" 
