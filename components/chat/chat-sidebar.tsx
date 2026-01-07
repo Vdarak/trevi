@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
+import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import type { MessagePayload, Citation } from '@/lib/api';
 
 interface ConversationNode {
@@ -299,7 +300,7 @@ export function ChatSidebar({
                                 {/* Streaming Indicator */}
                                 {isStreaming && (
                                     <div className="flex items-center gap-2 py-3 text-slate-500">
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <TreviLogoAnimation size={20} />
                                         <span className="text-sm">{statusMessage || 'Thinking...'}</span>
                                     </div>
                                 )}

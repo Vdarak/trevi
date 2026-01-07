@@ -20,6 +20,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { GitBranch, Layers, ArrowDown, ArrowRight, MessageSquare, X, Plus, Minus, Maximize2, Compass, PanelRight, Maximize } from 'lucide-react';
 import { CompleteEvent, MessagePayload, Citation } from '@/lib/api';
+import { TreviLogoAnimation, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { hierarchy, tree } from 'd3-hierarchy';
 import { NodeConversationPanel, NodeConversationModal } from '@/components/chat/node-conversation-panel';
 
@@ -56,6 +57,7 @@ export interface KnowledgeGraphProps {
     message: string;
     type: 'streaming' | 'exploring' | 'idle';
     activeNodeLabel?: string;
+    exploringNodeLabel?: string; // Label of the direction node being explored
   };
 }
 
@@ -1392,7 +1394,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(initialActiveNodeId || null); // Track clicked/active node for persistent path highlighting
-  const [viewMode, setViewMode] = useState<'panel' | 'modal'>('panel'); // Toggle between panel and modal view
+  const [viewMode, setViewMode] = useState<'panel' | 'modal'>('modal'); // Toggle between panel and modal view
 
   // Modal state for center modal view
   const [modalData, setModalData] = useState<{
@@ -2025,25 +2027,31 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     <div ref={containerRef} className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
       {/* Global Status Pill - Top Center */}
       {globalStatus && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
           <div className={`
-            flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border backdrop-blur-sm
+            flex items-center px-2 py-2 rounded-full shadow-lg border backdrop-blur-sm
+            transition-all duration-300 ease-out overflow-hidden
             ${globalStatus.isActive 
               ? 'bg-blue-50/90 border-blue-200 text-blue-700' 
               : 'bg-white/90 border-slate-200 text-slate-600'}
           `}>
             {globalStatus.isActive ? (
-              <>
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                <span className="text-sm font-medium">{globalStatus.message}</span>
-              </>
+              <TreviLogoAnimation size={32} />
             ) : (
-              <>
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span className="text-sm font-medium truncate max-w-[200px]">
-                  {globalStatus.activeNodeLabel || 'Ready'}
+              <TreviLogoStatic size={32} />
+            )}
+            {globalStatus.isActive ? (
+              <div className="flex items-center gap-1.5 px-2">
+                <span className="text-sm font-medium whitespace-nowrap">Exploring</span>
+                <span className="text-slate-400">—</span>
+                <span className="text-sm font-medium">
+                  {globalStatus.exploringNodeLabel || globalStatus.activeNodeLabel || 'Knowledge'}
                 </span>
-              </>
+              </div>
+            ) : (
+              <span className="text-sm font-medium px-2">
+                {globalStatus.activeNodeLabel || 'Ready'}
+              </span>
             )}
           </div>
         </div>

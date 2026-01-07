@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Trash2, Plus, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { TreviSpinner } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
@@ -169,18 +170,13 @@ export function Sidebar({
               >
                 <Button
                   variant="ghost"
-                  className="w-full justify-start font-normal h-auto py-2 text-left pr-10 bg-blue-50/50 border border-blue-100"
+                  className="w-full justify-between font-normal h-auto py-2.5 px-3 text-left bg-slate-50 border border-slate-200 hover:bg-slate-100"
                   disabled={pending.isLoading}
                 >
-                  <div className="flex flex-col items-start w-full">
-                    <span className="text-sm text-slate-600 truncate w-full">
-                      {pending.name}
-                    </span>
-                    <span className="text-xs text-blue-500 flex items-center gap-1.5">
-                      <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                      Creating...
-                    </span>
-                  </div>
+                  <span className="text-sm text-slate-600 truncate">
+                    {pending.name || 'Creating knowledge space...'}
+                  </span>
+                  <TreviSpinner size={16} className="text-slate-400 flex-shrink-0" />
                 </Button>
               </div>
             ))}

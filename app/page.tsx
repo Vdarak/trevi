@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
-import { GraphLoading } from '@/components/loading/graph-loading';
+import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import {
   sendMessage,
   createNewChatRequest,
@@ -429,7 +429,10 @@ export default function Home() {
         {/* Graph/Content Area */}
         <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
-            <GraphLoading />
+            <div className="flex flex-col items-center justify-center h-full w-full bg-white">
+              <TreviLogoAnimation size={200} />
+              <p className="mt-8 text-xl font-medium text-slate-700">Creating your knowledge space...</p>
+            </div>
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab
             <div className={`h-full ${mobileActiveTab === 'chat' ? 'hidden md:block' : ''}`}>
@@ -449,7 +452,8 @@ export default function Home() {
                   isActive: isStreaming || isLoading,
                   message: statusMessage || 'Exploring...',
                   type: isStreaming ? 'streaming' : 'exploring',
-                  activeNodeLabel: graphNodes.find(n => n.id === currentNodeId)?.label
+                  activeNodeLabel: graphNodes.find(n => n.id === currentNodeId)?.label,
+                  exploringNodeLabel: loadingNodeId ? graphNodes.find(n => n.id === loadingNodeId)?.label : undefined
                 }}
               />
             </div>

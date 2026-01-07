@@ -254,3 +254,21 @@ body {
 .animate-slide-in-left {
   animation: slide-in-left 0.2s ease-out;
 }
+
+/* Ticker/Marquee animation for status pill text */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker {
+  animation: ticker-scroll 8s linear infinite;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
