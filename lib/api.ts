@@ -331,13 +331,15 @@ export async function sendMessage(
   request: MessageRequest,
   onUpdate?: (event: UpdateEvent) => void,
   onComplete?: (event: CompleteEvent) => void,
-  onError?: (event: ErrorEvent) => void
+  onError?: (event: ErrorEvent) => void,
+  options?: { signal?: AbortSignal }
 ): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/sessions/messages`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
+    signal: options?.signal,
   });
 
   if (!response.ok) {

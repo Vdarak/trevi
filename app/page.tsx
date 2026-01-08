@@ -16,6 +16,7 @@ import {
   buildGraphNodesFromResponse,
   type CompleteEvent,
 } from '@/lib/api';
+import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
 
 export default function Home() {
   // Chat state
@@ -31,8 +32,21 @@ export default function Home() {
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
-  const [loadingNodeId, setLoadingNodeId] = useState<string | null>(null);
+  // Multi-connection state for parallel explorations
+  const connectionManagerRef = useRef(new ConnectionManager());
+  const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
+  const [connectionErrors, setConnectionErrors] = useState<ConnectionError[]>([]);
   const [statusMessage, setStatusMessage] = useState<string>("");
+
+  // Subscribe to ConnectionManager changes
+  useEffect(() => {
+    const manager = connectionManagerRef.current;
+    const unsubscribe = manager.subscribe(() => {
+      setLoadingNodeIds(new Set(manager.getActiveNodeIds()));
+      setConnectionErrors(manager.getRecentErrors());
+    });
+    return unsubscribe;
+  }, []);
 
   // Chat sidebar state (full conversation)
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
@@ -228,6 +242,8 @@ export default function Home() {
 
   // Handle clicking logo to go back to landing page
   const handleLogoClick = useCallback(() => {
+    // Cancel all active explorations
+    connectionManagerRef.current.cancelAll();
     setCurrentChatId(null);
     setCurrentNodeId(null);
     setRootNodeId(null);
@@ -237,7 +253,6 @@ export default function Home() {
     setStatusMessage("");
     setIsLoading(false);
     setIsCreatingChat(false);
-    setLoadingNodeId(null);
     setIsChatSidebarOpen(false);
     setIsStreaming(false);
   }, []);
@@ -247,13 +262,19 @@ export default function Home() {
     handleLogoClick();
   }, [handleLogoClick]);
 
-  // Handle clicking a direction node to explore
+  // Handle clicking a direction node to explore (supports multiple concurrent explorations)
   const handleDirectionClick = useCallback(async (nodeId: string) => {
-    if (!currentChatId || loadingNodeId) return;
+    if (!currentChatId) return;
 
-    setLoadingNodeId(nodeId);
+    // Check if this specific node is already loading
+    if (connectionManagerRef.current.isLoading(nodeId)) return;
+
+    // Get node label for status display
+    const nodeLabel = graphNodes.find(n => n.id === nodeId)?.label || 'topic';
+
+    // Start tracking this connection
+    const abortController = connectionManagerRef.current.start(nodeId, nodeLabel);
     setIsStreaming(true);
-    setStatusMessage("Exploring...");
 
     try {
       const request = createDirectedQueryRequest(currentChatId, nodeId);
@@ -261,9 +282,14 @@ export default function Home() {
       await sendMessage(
         request,
         (update) => {
-          setStatusMessage(update.message);
+          // Only update status if this is the only active connection
+          if (connectionManagerRef.current.getActiveCount() === 1) {
+            setStatusMessage(update.message);
+          }
         },
         (event) => {
+          // Mark connection as complete
+          connectionManagerRef.current.complete(nodeId);
           setCurrentNodeId(event.node_id);
 
           getGraph(event.chat_id)
@@ -279,26 +305,39 @@ export default function Home() {
               setGraphNodes(buildGraphFromResponses(newResponses));
             })
             .finally(() => {
-              setStatusMessage("");
-              setLoadingNodeId(null);
+              // Clear status if no more active connections
+              if (connectionManagerRef.current.getActiveCount() === 0) {
+                setStatusMessage("");
+                setIsStreaming(false);
+              }
             });
-
-          setIsStreaming(false);
         },
         (error) => {
           console.error("Direction query error:", error);
-          setStatusMessage(`Error: ${error.error}`);
-          setLoadingNodeId(null);
-          setIsStreaming(false);
-        }
+          connectionManagerRef.current.error(nodeId, error.error || 'Failed to explore');
+
+          if (connectionManagerRef.current.getActiveCount() === 0) {
+            setIsStreaming(false);
+          }
+        },
+        { signal: abortController.signal }
       );
     } catch (error) {
-      console.error("Failed to explore direction:", error);
-      setStatusMessage("Failed to explore direction");
-      setLoadingNodeId(null);
-      setIsStreaming(false);
+      // Check if this was an intentional abort
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Intentional cancellation - don't show error
+        connectionManagerRef.current.complete(nodeId);
+      } else {
+        console.error("Failed to explore direction:", error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to explore';
+        connectionManagerRef.current.error(nodeId, errorMessage);
+      }
+
+      if (connectionManagerRef.current.getActiveCount() === 0) {
+        setIsStreaming(false);
+      }
     }
-  }, [currentChatId, loadingNodeId]);
+  }, [currentChatId, graphNodes]);
 
   // Handle clicking a node in the graph (panel is handled internally by KnowledgeGraph)
   const handleNodeClick = useCallback((nodeId: string) => {
@@ -380,7 +419,7 @@ export default function Home() {
           <Menu className="w-5 h-5" />
         </button>
         <span className="font-semibold text-slate-800 truncate mx-4">
-          {showGraphPage 
+          {showGraphPage
             ? (graphNodes.find(n => n.id === rootNodeId)?.label || 'Knowledge Graph')
             : 'Trevi'}
         </span>
@@ -405,24 +444,22 @@ export default function Home() {
         {/* Mobile Tab Bar - bottom navigation */}
         {showGraphPage && (
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
-              <button
-                onClick={() => setMobileActiveTab('graph')}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                  mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
+            <button
+              onClick={() => setMobileActiveTab('graph')}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
                 }`}
-              >
-                <MapIcon className="w-5 h-5" />
-                <span className="text-xs font-medium">Graph</span>
-              </button>
-              <button
-                onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                  mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
+            >
+              <MapIcon className="w-5 h-5" />
+              <span className="text-xs font-medium">Graph</span>
+            </button>
+            <button
+              onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
                 }`}
-              >
-                <MessageSquare className="w-5 h-5" />
-                <span className="text-xs font-medium">Chat</span>
-              </button>
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span className="text-xs font-medium">Chat</span>
+            </button>
           </div>
         )}
 
@@ -441,7 +478,7 @@ export default function Home() {
                 rootNodeId={rootNodeId || undefined}
                 onNodeClick={handleNodeClick}
                 onDirectionClick={handleDirectionClick}
-                loadingNodeId={loadingNodeId}
+                loadingNodeIds={loadingNodeIds}
                 onToggleChatSidebar={toggleChatSidebar}
                 isChatSidebarOpen={isChatSidebarOpen}
                 initialActiveNodeId={currentNodeId}
@@ -449,11 +486,15 @@ export default function Home() {
                 isNodeStreaming={isNodeStreaming}
                 nodeStatusMessage={nodeStatusMessage}
                 globalStatus={{
-                  isActive: isStreaming || isLoading,
-                  message: statusMessage || 'Exploring...',
-                  type: isStreaming ? 'streaming' : 'exploring',
+                  isActive: isStreaming || isLoading || loadingNodeIds.size > 0,
+                  message: statusMessage,
+                  type: isStreaming ? 'streaming' : loadingNodeIds.size > 0 ? 'exploring' : 'idle',
                   activeNodeLabel: graphNodes.find(n => n.id === currentNodeId)?.label,
-                  exploringNodeLabel: loadingNodeId ? graphNodes.find(n => n.id === loadingNodeId)?.label : undefined
+                  exploringNodeIds: Array.from(loadingNodeIds),
+                  exploringNodeLabels: Array.from(loadingNodeIds)
+                    .map(id => graphNodes.find(n => n.id === id)?.label)
+                    .filter((label): label is string => !!label),
+                  errors: connectionErrors
                 }}
               />
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MessageSquarePlus, Send } from 'lucide-react';
 
 interface FeedbackModalProps {
@@ -25,6 +26,7 @@ interface FeedbackData {
 const LIKERT_LABELS = ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'];
 
 export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
+    const [mounted, setMounted] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [feedback, setFeedback] = useState<FeedbackData>({
         layoutPreference: null,
@@ -39,6 +41,11 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+
+    // Mount state for portal - ensures we're on client side
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleLikertChange = (field: keyof FeedbackData, value: LikertValue) => {
         setFeedback(prev => ({ ...prev, [field]: value }));
@@ -70,7 +77,8 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         onClose();
     };
 
-    if (!isOpen) return null;
+    // Don't render until mounted (for portal) and don't render if not open
+    if (!mounted || !isOpen) return null;
 
     const renderLikertScale = (
         field: keyof FeedbackData,
@@ -100,39 +108,41 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     );
 
     const steps = [
-        // Step 0: Layout & Orientation Preferences
-        <div key="prefs" className="space-y-6">
-            <div className="space-y-3">
+        // Step 0: All Preferences + Likert Scales (scrollable)
+        <div key="quantitative" className="space-y-5">
+            {/* Layout Preference */}
+            <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-700">Which graph layout do you prefer?</p>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                     <button
                         onClick={() => setFeedback(prev => ({ ...prev, layoutPreference: 'spacious' }))}
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all
-              ${feedback.layoutPreference === 'spacious'
+                        className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all
+                            ${feedback.layoutPreference === 'spacious'
                                 ? 'bg-blue-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
-                        Spacious Layout
+                        Spacious
                     </button>
                     <button
                         onClick={() => setFeedback(prev => ({ ...prev, layoutPreference: 'compact' }))}
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all
-              ${feedback.layoutPreference === 'compact'
+                        className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all
+                            ${feedback.layoutPreference === 'compact'
                                 ? 'bg-blue-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
-                        Compact Layout
+                        Compact
                     </button>
                 </div>
             </div>
 
-            <div className="space-y-3">
+            {/* Orientation Preference */}
+            <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-700">Which orientation helps you understand better?</p>
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                     <button
                         onClick={() => setFeedback(prev => ({ ...prev, orientationPreference: 'vertical' }))}
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all
-              ${feedback.orientationPreference === 'vertical'
+                        className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all
+                            ${feedback.orientationPreference === 'vertical'
                                 ? 'bg-blue-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
@@ -140,8 +150,8 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     </button>
                     <button
                         onClick={() => setFeedback(prev => ({ ...prev, orientationPreference: 'horizontal' }))}
-                        className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all
-              ${feedback.orientationPreference === 'horizontal'
+                        className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all
+                            ${feedback.orientationPreference === 'horizontal'
                                 ? 'bg-blue-500 text-white shadow-md'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                     >
@@ -149,48 +159,43 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     </button>
                 </div>
             </div>
-        </div>,
 
-        // Step 1: Usability Likert Scales
-        <div key="usability" className="space-y-6">
+            {/* All Likert Scales */}
             {renderLikertScale('overallUsability', 'The application was easy to use overall.')}
-            {renderLikertScale('controlsClarity', 'The controls (zoom, layout, direction) were intuitive.')}
-            {renderLikertScale('navigationEase', 'Navigating the knowledge graph was straightforward.')}
+            {renderLikertScale('controlsClarity', 'The controls were intuitive.')}
+            {renderLikertScale('navigationEase', 'Navigating the graph was straightforward.')}
+            {renderLikertScale('visualClarity', 'The visual design helped me focus.')}
+            {renderLikertScale('learningEffectiveness', 'This tool helps me learn effectively.')}
         </div>,
 
-        // Step 2: More Likert + Qualitative
-        <div key="experience" className="space-y-6">
-            {renderLikertScale('visualClarity', 'The visual design helped me focus on the content.')}
-            {renderLikertScale('learningEffectiveness', 'This tool would help me learn and explore topics effectively.')}
-
+        // Step 1: Subjective/Qualitative Questions
+        <div key="qualitative" className="space-y-5">
             <div className="space-y-2">
                 <p className="text-sm font-medium text-slate-700">What did you like most about this experience?</p>
                 <textarea
                     value={feedback.qualitativeFeedback}
                     onChange={(e) => setFeedback(prev => ({ ...prev, qualitativeFeedback: e.target.value }))}
                     placeholder="Share your thoughts..."
-                    className="w-full h-20 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-28 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
-        </div>,
 
-        // Step 3: Improvement Suggestion
-        <div key="suggestion" className="space-y-6">
             <div className="space-y-2">
-                <p className="text-sm font-medium text-slate-700">What would you improve or add to this application?</p>
+                <p className="text-sm font-medium text-slate-700">What would you improve or add?</p>
                 <textarea
                     value={feedback.improvementSuggestion}
                     onChange={(e) => setFeedback(prev => ({ ...prev, improvementSuggestion: e.target.value }))}
                     placeholder="Your suggestions help us improve..."
-                    className="w-full h-32 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-28 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
         </div>,
     ];
 
-    return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+    // Render using portal to escape parent container's stacking context
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
+            <div className="w-full h-full md:h-auto md:max-h-[85vh] md:max-w-md bg-white md:rounded-2xl shadow-2xl overflow-hidden animate-scale-in flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50">
                     <div className="flex items-center gap-3">
@@ -207,8 +212,8 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="px-6 py-5">
+                {/* Content - scrollable */}
+                <div className="flex-1 overflow-y-auto px-6 py-5">
                     {isSubmitted ? (
                         <div className="text-center py-8">
                             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
@@ -237,9 +242,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     )}
                 </div>
 
-                {/* Footer */}
+                {/* Footer - sticky at bottom */}
                 {!isSubmitted && (
-                    <div className="flex justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
+                    <div className="flex justify-between px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0 mt-auto">
                         <button
                             onClick={() => setCurrentStep(prev => prev - 1)}
                             disabled={currentStep === 0}
@@ -272,7 +277,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 )}
 
                 {isSubmitted && (
-                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
+                    <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 shrink-0 mt-auto">
                         <button
                             onClick={handleClose}
                             className="w-full px-5 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors"
@@ -282,7 +287,8 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
