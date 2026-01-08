@@ -103,6 +103,7 @@ export interface StatusPillProps {
     globalStatus: GlobalStatus;
     isExpanded: boolean;
     onToggleExpand: () => void;
+    warning?: string;
 }
 
 // ============================================================================

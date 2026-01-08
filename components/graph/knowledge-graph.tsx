@@ -58,12 +58,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
-  const [layoutMode, setLayoutMode] = useState<'custom' | 'tidy'>('custom');
-  const [direction, setDirection] = useState<'TB' | 'LR'>('TB');
+  const [layoutMode, setLayoutMode] = useState<'custom' | 'tidy'>('tidy');
+  const [direction, setDirection] = useState<'TB' | 'LR'>('LR');
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(initialActiveNodeId || null); // Track clicked/active node for persistent path highlighting
   const [viewMode, setViewMode] = useState<'panel' | 'modal'>('modal'); // Toggle between panel and modal view
   const [isStatusPillExpanded, setIsStatusPillExpanded] = useState(false); // Toggle for status pill dropdown
+  const [statusPillWarning, setStatusPillWarning] = useState<string | undefined>(undefined); // Temporary warning message for status pill
 
   // Modal state for center modal view
   const [modalData, setModalData] = useState<{
@@ -429,12 +430,20 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           isInActivePath: activePathNodeIds.has(node.id),
           isActiveNode: node.id === activeNodeId,
           onToggleCollapse: () => toggleCollapse(node.id),
-          onDirectionClick: () => onDirectionClick?.(node.id),
+          onDirectionClick: () => {
+            const isLoading = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
+            if (isLoading || globalStatus?.isActive) {
+              setStatusPillWarning("Trevi can only explore one topic at a time");
+              setTimeout(() => setStatusPillWarning(undefined), 3000);
+              return;
+            }
+            onDirectionClick?.(node.id);
+          },
           onCloseExpanded: () => setExpandedNodeId(null),
         },
       };
     });
-  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes, activePathNodeIds, activeNodeId]);
+  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes, activePathNodeIds, activeNodeId, globalStatus, loadingNodeIds]);
 
   // Compute edges with active path styling
   const edgesWithActivePath = useMemo(() => {
@@ -593,6 +602,38 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
+      // Check if we are already exploring/active
+      // If globalStatus.isActive is true, we deny exploring another node
+      if (globalStatus?.isActive && node.id !== globalStatus.activeNodeLabel) {
+        // Note: node.id is ID, activeNodeLabel is Label. This check is approximate.
+        // Better check: if we are loading OR if we are in 'exploring' state (which implies streaming/loading)
+        // Actually user said "currently a node is being explored".
+
+        // Let's use loadingNodeIds first as a hard check for "busy"
+        const isLoading = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
+
+        if (isLoading || globalStatus.isActive) {
+          // Only block if we are clicking a direction node (which triggers explore) 
+          // OR if we want to block ANY node click that changes context?
+          // User said "if the user clicks on any other explore node".
+          // Direction nodes usually are the ones triggering exploration. 
+          // Concept nodes just open panels.
+          // Let's assume we block 'onNodeClick' which usually triggers exploration for direction nodes, or sets focus.
+
+          // But wait, clicking a normal node just opens the panel/modal. That should be allowed?
+          // User said "clicks on any other explore node". 'Explore node' implies 'Direction Node' or similar action-triggering node.
+
+          // Let's check node data.
+          const isDirectionNode = node.data?.isDirection;
+
+          if (isDirectionNode) {
+            setStatusPillWarning("Trevi can only explore one topic at a time");
+            setTimeout(() => setStatusPillWarning(undefined), 3000);
+            return;
+          }
+        }
+      }
+
       onNodeClick?.(node.id);
 
       // Set this node as the active node for persistent path highlighting
@@ -708,6 +749,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             globalStatus={globalStatus}
             isExpanded={isStatusPillExpanded}
             onToggleExpand={() => setIsStatusPillExpanded(!isStatusPillExpanded)}
+            warning={statusPillWarning}
           />
         </div>
       )}

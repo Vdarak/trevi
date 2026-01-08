@@ -8,17 +8,57 @@ import { StatusPillProps } from '../types';
  * Global Status Pill Component
  * Shows current exploration status with expandable details for multiple nodes
  */
-export function StatusPill({ globalStatus, isExpanded, onToggleExpand }: StatusPillProps) {
-    // Error state
+export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }: StatusPillProps) {
+
+    // Warning state - overrides everything else when present
+    if (warning) {
+        return (
+            <div className="flex items-center px-2 py-2 rounded-full shadow-lg border backdrop-blur-sm bg-orange-50/90 border-orange-200 transition-all duration-300 ease-out animate-in fade-in zoom-in-95">
+                {/* Logo Section */}
+                <div className="flex-shrink-0">
+                    <TreviLogoStatic size={45} />
+                </div>
+
+                {/* Text Section - Stacked Layout */}
+                <div className="flex flex-col ml-3 mr-2 max-w-[200px] md:max-w-md">
+                    {/* Top Row: Status Title */}
+                    <div className="flex items-center">
+                        <span className="text-xs md:text-sm font-bold uppercase tracking-wider leading-none mb-0.5 text-orange-600">
+                            Warning
+                        </span>
+                    </div>
+
+                    {/* Bottom Row: Warning message */}
+                    <span className="text-xs md:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis block max-w-[120px] md:max-w-[300px] leading-tight text-slate-700">
+                        {warning}
+                    </span>
+                </div>
+            </div>
+        );
+    }
+
+    // Error state layout
     if (globalStatus.errors && globalStatus.errors.length > 0) {
         return (
-            <div className="flex items-center px-3 py-2 rounded-full shadow-lg border backdrop-blur-sm bg-red-50/90 border-red-200 text-red-700 transition-all duration-300 ease-out">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span className="text-sm font-medium">
-                    Failed: {globalStatus.errors[0].nodeLabel}
-                </span>
+            <div className="flex items-center px-2 py-2 rounded-full shadow-lg border backdrop-blur-sm bg-red-50/90 border-red-200 transition-all duration-300 ease-out">
+                {/* Logo Section */}
+                <div className="flex-shrink-0">
+                    <TreviLogoStatic size={45} />
+                </div>
+
+                {/* Text Section - Stacked Layout */}
+                <div className="flex flex-col ml-3 mr-2 max-w-[200px] md:max-w-md">
+                    {/* Top Row: Status Title */}
+                    <div className="flex items-center">
+                        <span className="text-xs md:text-sm font-bold uppercase tracking-wider leading-none mb-0.5 text-red-600">
+                            Failure
+                        </span>
+                    </div>
+                    {/* Bottom Row: Error Node Label */}
+                    <span className="text-xs md:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis block max-w-[120px] md:max-w-[300px] leading-tight text-slate-700">
+                        {globalStatus.errors[0].nodeLabel}
+                    </span>
+                </div>
             </div>
         );
     }
@@ -43,24 +83,27 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand }: StatusP
           ${hasMultipleNodes ? 'cursor-pointer hover:shadow-xl' : ''}
         `}
             >
-                {globalStatus.isActive ? (
-                    <TreviLogoAnimation size={32} />
-                ) : (
-                    <TreviLogoStatic size={32} />
-                )}
-                {globalStatus.isActive ? (
-                    <div className="flex items-center gap-1.5 px-2 max-w-[200px] md:max-w-md">
-                        <span className="text-xs md:text-sm font-medium whitespace-nowrap">Exploring</span>
-                        <span className="text-slate-400">—</span>
-                        <span className="text-xs md:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis block max-w-[120px] md:max-w-[300px]">
-                            {hasMultipleNodes
-                                ? `${globalStatus.exploringNodeLabels!.length} nodes`
-                                : globalStatus.exploringNodeLabels?.[0] || globalStatus.activeNodeLabel || 'Knowledge'}
+                {/* Logo Section */}
+                <div className="flex-shrink-0">
+                    {globalStatus.isActive ? (
+                        <TreviLogoAnimation size={45} />
+                    ) : (
+                        <TreviLogoStatic size={45} />
+                    )}
+                </div>
+
+                {/* Text Section - Stacked Layout */}
+                <div className="flex flex-col ml-3 mr-2 max-w-[200px] md:max-w-md">
+                    {/* Top Row: Status Title */}
+                    <div className="flex items-center">
+                        <span className={`text-xs md:text-sm font-bold uppercase tracking-wider leading-none mb-0.5 ${globalStatus.isActive ? 'text-blue-600' : 'text-blue-600'}`}>
+                            {globalStatus.isActive ? 'Exploring' : 'Current'}
                         </span>
-                        {/* Expand/collapse chevron for multiple nodes */}
+
+                        {/* Chevron aligned with title for better visual balance when stacked */}
                         {hasMultipleNodes && (
                             <svg
-                                className={`w-4 h-4 ml-1 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''} flex-shrink-0`}
+                                className={`w-3 h-3 ml-1.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''} text-blue-400`}
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -69,15 +112,18 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand }: StatusP
                             </svg>
                         )}
                     </div>
-                ) : (
-                    <div className="flex items-center gap-1.5 px-2 max-w-[200px] md:max-w-md">
-                        <span className="text-xs md:text-sm text-blue-600 font-bold whitespace-nowrap">Current</span>
-                        <span className="text-slate-400">—</span>
-                        <span className="text-xs md:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis block max-w-[120px] md:max-w-[300px]">
-                            {globalStatus.activeNodeLabel || 'Ready'}
-                        </span>
-                    </div>
-                )}
+
+                    {/* Bottom Row: Node Label */}
+                    <span className={`text-xs md:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis block max-w-[120px] md:max-w-[300px] leading-tight ${globalStatus.isActive ? 'text-slate-700' : ''}`}>
+                        {globalStatus.isActive ? (
+                            hasMultipleNodes
+                                ? `${globalStatus.exploringNodeLabels!.length} nodes`
+                                : globalStatus.exploringNodeLabels?.[0] || globalStatus.activeNodeLabel || 'Knowledge'
+                        ) : (
+                            globalStatus.activeNodeLabel || 'Ready'
+                        )}
+                    </span>
+                </div>
             </div>
 
             {/* Expanded dropdown showing all exploring nodes */}
