@@ -15,6 +15,7 @@ import {
   createFollowUpRequest,
   getGraph,
   buildGraphNodesFromResponse,
+  deleteNode,
   type CompleteEvent,
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
@@ -247,6 +248,43 @@ export default function Home() {
       setProcessingQuery(null);
     }
   }, [currentChatId, isStreaming]);
+
+  // Handle deleting a node and all its descendants
+  const handleDeleteNode = useCallback(async (nodeId: string) => {
+    if (!currentChatId) return;
+
+    // Don't allow deletion while exploring/streaming
+    const isAnyLoading = loadingNodeIds.size > 0 || isStreaming || isLoading;
+    if (isAnyLoading) {
+      setStatusMessage("Cannot delete while exploring");
+      setTimeout(() => setStatusMessage(""), 3000);
+      return;
+    }
+
+    try {
+      setStatusMessage("Deleting branch...");
+      const response = await deleteNode(currentChatId, nodeId);
+
+      // Update current node to what the API returns (parent of deleted node)
+      setCurrentNodeId(response.current_node);
+
+      // Update graph with the new data from API response
+      const graphResponse = {
+        session_id: response.session_id,
+        chat_id: response.chat_id,
+        graph: response.graph,
+        current_node: response.current_node,
+      };
+      const { nodes } = buildGraphNodesFromResponse(graphResponse);
+      setGraphNodes(nodes);
+
+      setStatusMessage("");
+    } catch (error) {
+      console.error("Failed to delete node:", error);
+      setStatusMessage("Failed to delete branch");
+      setTimeout(() => setStatusMessage(""), 3000);
+    }
+  }, [currentChatId, loadingNodeIds, isStreaming, isLoading]);
 
   // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
@@ -530,6 +568,7 @@ export default function Home() {
                 rootNodeId={rootNodeId || undefined}
                 onNodeClick={handleNodeClick}
                 onDirectionClick={handleDirectionClick}
+                onDeleteNode={handleDeleteNode}
                 loadingNodeIds={loadingNodeIds}
                 onToggleChatSidebar={toggleChatSidebar}
                 isChatSidebarOpen={isChatSidebarOpen}

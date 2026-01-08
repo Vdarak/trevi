@@ -17,7 +17,7 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }
                 {/* Logo Section - Responsive sizing */}
                 <div className="flex-shrink-0">
                     <div className="md:hidden">
-                        <TreviLogoStatic size={32} />
+                        <TreviLogoStatic size={32} className="text-white" />
                     </div>
                     <div className="hidden md:block">
                         <TreviLogoStatic size={45} />
@@ -98,19 +98,19 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }
                     {globalStatus.isActive ? (
                         <>
                             <div className="md:hidden">
-                                <TreviLogoAnimation size={32} />
+                                <TreviLogoAnimation size={32} className="text-white" />
                             </div>
                             <div className="hidden md:block">
-                                <TreviLogoAnimation size={45} />
+                                <TreviLogoAnimation size={45} className="text-white" />
                             </div>
                         </>
                     ) : (
                         <>
                             <div className="md:hidden">
-                                <TreviLogoStatic size={32} />
+                                <TreviLogoStatic size={32} className="text-white" />
                             </div>
                             <div className="hidden md:block">
-                                <TreviLogoStatic size={45} />
+                                <TreviLogoStatic size={45} className="text-white" />
                             </div>
                         </>
                     )}

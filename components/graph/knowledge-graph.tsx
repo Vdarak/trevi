@@ -31,6 +31,7 @@ import {
 } from './graph-layout';
 import { ConceptNode } from './nodes/concept-node';
 import { ConversationPanelNode } from './nodes/conversation-panel-node';
+import { DeletableEdge, type DeletableEdgeData } from './edges/deletable-edge';
 import { Tooltip } from './ui/tooltip';
 import { ToolbarButton } from './ui/toolbar-button';
 import { StatusPill } from './ui/status-pill';
@@ -47,12 +48,17 @@ const nodeTypes = {
   conversationPanel: ConversationPanelNode,
 } as const;
 
+// Edge type registration for React Flow
+const edgeTypes = {
+  deletable: DeletableEdge,
+} as const;
+
 // ============================================================================
 // Main Component
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, globalStatus }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, globalStatus }: KnowledgeGraphProps) {
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -224,21 +230,44 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       },
     }));
 
+    // Check if any node is currently being explored/loaded
+    const isAnyNodeLoading = loadingNodeIds instanceof Set
+      ? loadingNodeIds.size > 0
+      : (loadingNodeIds || []).length > 0;
+
     const rfEdges: Edge[] = visibleNodes
       .filter((node) => node.parentId && node.parentId !== "root" && !hiddenNodes.has(node.parentId))
-      .map((node) => ({
-        id: `e-${node.parentId}-${node.id}`,
-        source: node.parentId!,
-        target: node.id,
-        type: "default",
-        style: { stroke: "#94a3b8", strokeWidth: 2 },
-      }));
+      .map((node) => {
+        // Check if this node or any of its descendants is being loaded
+        const nodeIsLoading = loadingNodeIds instanceof Set
+          ? loadingNodeIds.has(node.id)
+          : (loadingNodeIds || []).includes(node.id);
+        
+        // Cannot delete if:
+        // 1. The target node is being loaded
+        // 2. Any node in the graph is being explored (globalStatus)
+        // 3. This is a root node (has no parent - handled by filter above)
+        const canDelete = !nodeIsLoading && !isAnyNodeLoading;
+
+        return {
+          id: `e-${node.parentId}-${node.id}`,
+          source: node.parentId!,
+          target: node.id,
+          type: "deletable",
+          style: { stroke: "#94a3b8", strokeWidth: 2 },
+          data: {
+            canDelete,
+            direction,
+            onDelete: () => onDeleteNode?.(node.id),
+          } as DeletableEdgeData,
+        };
+      });
 
     const layouted = layoutMode === 'tidy'
       ? getTidyTreeLayout(rfNodes, rfEdges, direction)
       : getTreeLayout(rfNodes, rfEdges, direction);
     return { layoutedNodes: layouted.nodes, layoutedEdges: layouted.edges, rootIds: rootIdList, primaryRootId: primaryRoot };
-  }, [graphNodes, rootNodeId, hiddenNodes, childMap, collapsedNodes, loadingNodeIds, layoutMode, direction]);
+  }, [graphNodes, rootNodeId, hiddenNodes, childMap, collapsedNodes, loadingNodeIds, layoutMode, direction, onDeleteNode]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -502,6 +531,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       );
 
       // Update edge styling - hover path uses animated dashed style for distinction
+      // Also set isNodeHovered for edges where target matches hovered node
       setEdges((eds) =>
         eds.map((e) => {
           if (e.id.startsWith('panel-edge-')) return e;
@@ -510,10 +540,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           const isActivePath = activePathEdgeIds.has(e.id);
           const isHoverLastEdge = e.id === hoverLastEdge?.id;
           const isActiveLastEdge = e.id === lastEdgeId;
+          // Check if this edge's target is the hovered node (for delete button)
+          const isTargetHovered = e.target === node.id;
 
           if (isHoverPath) {
             return {
               ...e,
+              data: { ...e.data, isNodeHovered: isTargetHovered },
               style: { stroke: "#3b82f6", strokeWidth: 5 },
               animated: true,
               zIndex: 1001,
@@ -523,6 +556,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             // Keep active path visible but dimmed during hover
             return {
               ...e,
+              data: { ...e.data, isNodeHovered: isTargetHovered },
               style: { stroke: "#93c5fd", strokeWidth: 3 },
               animated: false,
               zIndex: 1000,
@@ -538,6 +572,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           }
           return {
             ...e,
+            data: { ...e.data, isNodeHovered: isTargetHovered },
             style: { stroke: "#e2e8f0", strokeWidth: 2 },
             animated: false,
             zIndex: 0,
@@ -567,7 +602,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       }))
     );
 
-    // Restore edge styling based on active path
+    // Restore edge styling based on active path, reset isNodeHovered
     setEdges((eds) =>
       eds.map((e) => {
         if (e.id.startsWith('panel-edge-')) return e;
@@ -576,6 +611,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           const isLastEdge = e.id === lastEdgeId;
           return {
             ...e,
+            data: { ...e.data, isNodeHovered: false },
             style: { stroke: "#3b82f6", strokeWidth: 3 },
             animated: false,
             zIndex: 1000,
@@ -591,6 +627,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         }
         return {
           ...e,
+          data: { ...e.data, isNodeHovered: false },
           style: { stroke: "#94a3b8", strokeWidth: 2 },
           animated: false,
           zIndex: 0,
@@ -856,6 +893,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         onNodeMouseLeave={handleNodeMouseLeave}
         onNodeClick={handleNodeClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={true}

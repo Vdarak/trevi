@@ -18,13 +18,13 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
 
   useEffect(() => {
     if (!animate) return;
-    
+
     const revealPath = revealPathRef.current;
     if (!revealPath) return;
 
     // Get the exact path length
     const pathLength = revealPath.getTotalLength();
-    
+
     // Set up the reveal path with correct dasharray
     revealPath.style.strokeDasharray = String(pathLength);
     revealPath.style.strokeDashoffset = String(pathLength);
@@ -106,28 +106,28 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
   const scale = size / 34;
 
   return (
-    <div 
+    <div
       className={`rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0 ${className}`}
       style={{ width: size, height: size }}
     >
-      <svg 
-        width={size * 0.75} 
-        height={size * 0.8} 
-        viewBox="-4 -4 42 42" 
-        fill="none" 
+      <svg
+        width={size * 0.75}
+        height={size * 0.8}
+        viewBox="-4 -4 42 42"
+        fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: 'visible' }}
       >
         {/* Define the path for animation reference */}
         <defs>
-          <path 
+          <path
             id="treviPath"
             d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
           />
         </defs>
 
         {/* Animated reveal path */}
-        <path 
+        <path
           ref={revealPathRef}
           d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
           stroke="#fff"
@@ -139,24 +139,24 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
         {/* Main Ball with motion and scale animation - solid white fill */}
         {animate && (
           <circle r="0" fill="#fff">
-            <animateMotion 
-              dur="5s" 
-              repeatCount="indefinite" 
+            <animateMotion
+              dur="5s"
+              repeatCount="indefinite"
               calcMode="spline"
-              keyTimes="0; 0.15; 0.45; 0.55; 0.85; 1" 
+              keyTimes="0; 0.15; 0.45; 0.55; 0.85; 1"
               keyPoints="0; 0; 1; 1; 0; 0"
               keySplines="0 0 1 1; 0.42 0 0.58 1; 0 0 1 1; 0.42 0 0.58 1; 0 0 1 1"
             >
               <mpath href="#treviPath" />
             </animateMotion>
-            <animate 
-              attributeName="r" 
-              values="0; 3; 3; 3; 3; 0" 
-              keyTimes="0; 0.1; 0.15; 0.85; 0.9; 1" 
+            <animate
+              attributeName="r"
+              values="0; 3; 3; 3; 3; 0"
+              keyTimes="0; 0.1; 0.15; 0.85; 0.9; 1"
               dur="5s"
-              repeatCount="indefinite" 
+              repeatCount="indefinite"
               calcMode="spline"
-              keySplines="0.42 0 0.58 1; 0 0 1 1; 0 0 1 1; 0 0 1 1; 0.42 0 0.58 1" 
+              keySplines="0.42 0 0.58 1; 0 0 1 1; 0 0 1 1; 0 0 1 1; 0.42 0 0.58 1"
             />
           </circle>
         )}
@@ -170,27 +170,27 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
  */
 export function TreviLogoStatic({ size = 24, className = '' }: { size?: number; className?: string }) {
   return (
-    <div 
+    <div
       className={`rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0 ${className}`}
       style={{ width: size, height: size }}
     >
-      <svg 
-        width={size * 0.75} 
-        height={size * 0.8} 
-        viewBox="-4 -4 42 42" 
-        fill="none" 
+      <svg
+        width={size * 0.75}
+        height={size * 0.8}
+        viewBox="-4 -4 42 42"
+        fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{ overflow: 'visible' }}
       >
-        <path 
+        <path
           d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
-          stroke="#fff"
+          stroke="currentColor"
           strokeWidth="3"
           strokeLinecap="round"
           fill="none"
         />
         {/* Ball at the start of the path */}
-        <circle cx="30.5" cy="9.90391" r="3" fill="#fff" />
+        <circle cx="30.5" cy="9.90391" r="3" fill="currentColor" />
       </svg>
     </div>
   );
@@ -201,24 +201,24 @@ export function TreviLogoStatic({ size = 24, className = '' }: { size?: number; 
  */
 export function TreviSpinner({ size = 16, className = '' }: { size?: number; className?: string }) {
   return (
-    <svg 
+    <svg
       className={`animate-spin ${className}`}
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
       fill="none"
     >
-      <circle 
-        className="opacity-25" 
-        cx="12" 
-        cy="12" 
-        r="10" 
-        stroke="currentColor" 
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
         strokeWidth="3"
       />
-      <path 
-        className="opacity-75" 
-        fill="currentColor" 
+      <path
+        className="opacity-75"
+        fill="currentColor"
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       />
     </svg>

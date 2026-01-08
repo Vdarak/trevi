@@ -21,6 +21,7 @@ export interface KnowledgeGraphProps {
     rootNodeIds?: string[]; // Multiple roots for multi-graph support
     onNodeClick?: (nodeId: string) => void;
     onDirectionClick?: (nodeId: string) => void; // Callback for clicking direction nodes
+    onDeleteNode?: (nodeId: string) => void; // Callback for deleting a node and its descendants
     loadingNodeIds?: Set<string> | string[] | null; // Node IDs currently being loaded
     onToggleChatSidebar?: () => void; // Toggle full conversation sidebar
     isChatSidebarOpen?: boolean; // Whether the chat sidebar is open
