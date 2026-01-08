@@ -24,9 +24,16 @@ export function GraphLoading() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full bg-white">
-      {/* Trevi Logo Animation - Large */}
+      {/* Trevi Logo Animation - Responsive sizing */}
       <div className="mb-8">
-        <TreviLogoAnimation size={300} />
+        {/* Mobile: 40dvw (dynamic viewport width), capped at 200px */}
+        <div className="md:hidden" style={{ width: 'min(40dvw, 200px)', height: 'min(40dvw, 200px)' }}>
+          <TreviLogoAnimation size={200} />
+        </div>
+        {/* Desktop: 300px */}
+        <div className="hidden md:block">
+          <TreviLogoAnimation size={300} />
+        </div>
       </div>
 
       {/* Loading message with fade transition */}

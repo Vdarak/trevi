@@ -6,7 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
-import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
+import { TreviLogoAnimation, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import {
   sendMessage,
   editChatResponse,
@@ -453,21 +453,24 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden">
-      {/* Mobile Header - visible on mobile */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between md:hidden">
-        <button
-          onClick={() => setIsMobileSidebarOpen(true)}
-          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-        <span className="font-semibold text-slate-800 truncate mx-4">
-          {showGraphPage
-            ? (graphNodes.find(n => n.id === rootNodeId)?.label || 'Knowledge Graph')
-            : 'Trevi'}
-        </span>
-        <div className="w-9" /> {/* Spacer for centering */}
-      </div>
+      {/* Mobile Hamburger Button - floating button to open sidebar (hidden when sidebar is open) */}
+      {!isMobileSidebarOpen && (
+        <div className="fixed top-4 left-4 z-40 md:hidden">
+          <button
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Home Header - centered Trevi logo (only on landing page) */}
+      {showLandingPage && !isMobileSidebarOpen && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 md:hidden">
+          <TreviLogoStatic size={32} />
+        </div>
+      )}
 
       {/* Left Sidebar - Knowledge Spaces */}
       <Sidebar
@@ -483,7 +486,7 @@ export default function Home() {
       />
 
       {/* Main Content Area - flexes to accommodate right sidebar */}
-      <main className="flex-1 flex flex-col md:flex-row h-full relative overflow-hidden pt-14 md:pt-0">
+      <main className="flex-1 flex flex-col md:flex-row h-full relative overflow-hidden">
         {/* Mobile Tab Bar - bottom navigation */}
         {showGraphPage && (
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
@@ -510,8 +513,14 @@ export default function Home() {
         <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
             <div className="flex flex-col items-center justify-center h-full w-full bg-white">
-              <TreviLogoAnimation size={200} />
-              <p className="mt-8 text-xl font-medium text-slate-700">Creating your knowledge space...</p>
+              {/* Responsive logo sizing */}
+              <div className="md:hidden" style={{ width: 'min(40dvw, 150px)', height: 'min(40dvw, 150px)' }}>
+                <TreviLogoAnimation size={150} />
+              </div>
+              <div className="hidden md:block">
+                <TreviLogoAnimation size={200} />
+              </div>
+              <p className="mt-8 text-lg md:text-xl font-medium text-slate-700 text-center px-4">Creating your knowledge space...</p>
             </div>
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab

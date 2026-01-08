@@ -14,9 +14,14 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }
     if (warning) {
         return (
             <div className="flex items-center px-2 py-2 rounded-full shadow-lg border backdrop-blur-sm bg-orange-50/90 border-orange-200 transition-all duration-300 ease-out animate-in fade-in zoom-in-95">
-                {/* Logo Section */}
+                {/* Logo Section - Responsive sizing */}
                 <div className="flex-shrink-0">
-                    <TreviLogoStatic size={45} />
+                    <div className="md:hidden">
+                        <TreviLogoStatic size={32} />
+                    </div>
+                    <div className="hidden md:block">
+                        <TreviLogoStatic size={45} />
+                    </div>
                 </div>
 
                 {/* Text Section - Stacked Layout */}
@@ -41,9 +46,14 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }
     if (globalStatus.errors && globalStatus.errors.length > 0) {
         return (
             <div className="flex items-center px-2 py-2 rounded-full shadow-lg border backdrop-blur-sm bg-red-50/90 border-red-200 transition-all duration-300 ease-out">
-                {/* Logo Section */}
+                {/* Logo Section - Responsive sizing */}
                 <div className="flex-shrink-0">
-                    <TreviLogoStatic size={45} />
+                    <div className="md:hidden">
+                        <TreviLogoStatic size={32} />
+                    </div>
+                    <div className="hidden md:block">
+                        <TreviLogoStatic size={45} />
+                    </div>
                 </div>
 
                 {/* Text Section - Stacked Layout */}
@@ -83,12 +93,26 @@ export function StatusPill({ globalStatus, isExpanded, onToggleExpand, warning }
           ${hasMultipleNodes ? 'cursor-pointer hover:shadow-xl' : ''}
         `}
             >
-                {/* Logo Section */}
+                {/* Logo Section - Responsive sizing */}
                 <div className="flex-shrink-0">
                     {globalStatus.isActive ? (
-                        <TreviLogoAnimation size={45} />
+                        <>
+                            <div className="md:hidden">
+                                <TreviLogoAnimation size={32} />
+                            </div>
+                            <div className="hidden md:block">
+                                <TreviLogoAnimation size={45} />
+                            </div>
+                        </>
                     ) : (
-                        <TreviLogoStatic size={45} />
+                        <>
+                            <div className="md:hidden">
+                                <TreviLogoStatic size={32} />
+                            </div>
+                            <div className="hidden md:block">
+                                <TreviLogoStatic size={45} />
+                            </div>
+                        </>
                     )}
                 </div>
 

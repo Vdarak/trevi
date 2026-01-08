@@ -486,8 +486,8 @@ export function ChatSidebar({
                                 disabled={!inputValue.trim() || isStreaming}
                                 className="
                                     p-3 rounded-xl 
-                                    bg-blue-600 text-white 
-                                    hover:bg-blue-700 active:scale-95 
+                                    bg-slate-900 text-white 
+                                    hover:bg-slate-800 active:scale-95 
                                     disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 
                                     transition-all
                                 "

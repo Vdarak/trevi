@@ -304,7 +304,6 @@ export function FeedbackButton({ onClick }: { onClick: () => void }) {
             </div>
             <div className="flex flex-col items-start">
                 <span className="text-sm font-medium text-slate-800">Give Feedback</span>
-                <span className="text-xs text-slate-500">Help us improve</span>
             </div>
         </button>
     );

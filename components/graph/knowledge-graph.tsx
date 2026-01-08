@@ -756,11 +756,12 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
       {/* Chat Toggle Button - Top Right (hidden on mobile, we have tab navigation) */}
       {onToggleChatSidebar && (
-        <div className="hidden md:block absolute top-4 right-4 z-50 bg-white rounded-lg shadow-md border border-slate-200 p-1">
+        <div className="hidden md:block absolute top-4 right-4 z-30 bg-white rounded-lg shadow-md border border-slate-200 p-1">
           <ToolbarButton
             onClick={onToggleChatSidebar}
             isActive={isChatSidebarOpen}
             title="Full Conversation"
+            tooltipPosition="left"
           >
             <MessageSquare className="w-5 h-5" />
           </ToolbarButton>
@@ -768,7 +769,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       )}
 
       {/* Control Buttons - Bottom Left - Vertically Stacked Groups */}
-      <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-2">
+      <div className="absolute bottom-4 left-4 z-30 flex flex-col gap-2">
         {/* View Mode Toggle (Panel vs Modal) */}
         <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
           <ToolbarButton

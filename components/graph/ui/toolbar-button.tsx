@@ -5,9 +5,9 @@ import { ToolbarButtonProps } from '../types';
 
 /**
  * Toolbar Button with Delayed Tooltip (md+ screens only)
- * Tooltip appears after 300ms hover on the right side
+ * Tooltip appears after 300ms hover on the specified side (default: right)
  */
-export function ToolbarButton({ onClick, isActive = false, title, children, className = '' }: ToolbarButtonProps) {
+export function ToolbarButton({ onClick, isActive = false, title, children, className = '', tooltipPosition = 'right' }: ToolbarButtonProps & { tooltipPosition?: 'left' | 'right' }) {
     const [showTooltip, setShowTooltip] = useState(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -41,13 +41,14 @@ export function ToolbarButton({ onClick, isActive = false, title, children, clas
             >
                 {children}
             </button>
-            {/* Tooltip - hidden on small screens */}
             {showTooltip && (
-                <div className="hidden md:block absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 pointer-events-none">
+                <div className={`hidden md:block absolute top-1/2 -translate-y-1/2 z-50 pointer-events-none ${tooltipPosition === 'left' ? 'right-full mr-2' : 'left-full ml-2'
+                    }`}>
                     <div className="bg-slate-800 text-white text-xs font-medium px-2.5 py-1.5 rounded-md whitespace-nowrap shadow-lg">
                         {title}
                         {/* Arrow */}
-                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800" />
+                        <div className={`absolute top-1/2 -translate-y-1/2 border-4 border-transparent ${tooltipPosition === 'left' ? 'left-full border-l-slate-800' : 'right-full border-r-slate-800'
+                            }`} />
                     </div>
                 </div>
             )}

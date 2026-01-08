@@ -123,8 +123,11 @@ export function Sidebar({
       >
         {/* Mobile close button */}
         <button
-          onClick={onMobileClose}
-          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 md:hidden"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMobileClose?.();
+          }}
+          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 md:hidden z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -173,7 +176,7 @@ export function Sidebar({
                     disabled={pending.isLoading}
                   >
                     <span className="text-sm text-slate-600 truncate">
-                      {pending.name || 'Creating knowledge space...'}
+                      {pending.name || 'Creating Topic Tree...'}
                     </span>
                     <TreviSpinner size={16} className="text-slate-400 flex-shrink-0" />
                   </Button>
@@ -228,7 +231,7 @@ export function Sidebar({
           </div>
         </div>
 
-        <div className="px-4 py-4 border-t border-slate-200">
+        <div className="px-4 py-2 sm:py-4">
           <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
         </div>
 
