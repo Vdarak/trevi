@@ -4,7 +4,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
-import type { MessagePayload, Citation } from '@/lib/api';
+import { StatusLine } from '@/components/ui/status-line';
+import { getBibliography } from '@/lib/api';
+import type { MessagePayload, Citation, BibliographyResponse } from '@/lib/api';
 
 interface ConversationNode {
     id: string;
@@ -17,6 +19,7 @@ type TabType = 'full' | 'thread' | 'bibliography';
 
 interface ChatSidebarProps {
     isOpen: boolean;
+    chatId?: string;
     conversationNodes: ConversationNode[];
     threadNodes?: ConversationNode[];
     rootLabel?: string;
@@ -25,13 +28,14 @@ interface ChatSidebarProps {
     isStreaming: boolean;
     statusMessage: string;
     onSendMessage: (message: string) => void;
+    onEditMessage?: (nodeId: string, newMessage: string) => void;
     onClose: () => void;
 }
 
 const tabs = [
     { id: 'thread' as TabType, label: 'Thread', icon: Route },
     { id: 'full' as TabType, label: 'Full', icon: MessageSquare },
-    { id: 'bibliography' as TabType, label: 'Sources', icon: BookOpen },
+    { id: 'bibliography' as TabType, label: 'Bibliography', icon: BookOpen },
 ];
 
 const MIN_WIDTH = 400;
@@ -39,6 +43,7 @@ const MAX_WIDTH_VW = 50;
 
 export function ChatSidebar({
     isOpen,
+    chatId,
     conversationNodes,
     threadNodes = [],
     rootLabel = 'Conversation',
@@ -47,6 +52,7 @@ export function ChatSidebar({
     isStreaming,
     statusMessage,
     onSendMessage,
+    onEditMessage,
     onClose,
 }: ChatSidebarProps) {
     const [inputValue, setInputValue] = useState('');
@@ -55,7 +61,9 @@ export function ChatSidebar({
     const [isResizing, setIsResizing] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const [shouldRender, setShouldRender] = useState(false);
-    
+    const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
+    const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -126,6 +134,22 @@ export function ChatSidebar({
         return () => clearTimeout(timeoutId);
     }, [activeNodeId, activeTab]);
 
+    const fetchBibliography = useCallback(() => {
+        if (!chatId) return;
+        setIsLoadingBibliography(true);
+        getBibliography(chatId)
+            .then((data: BibliographyResponse) => setBibliography(data))
+            .catch((err: Error) => console.error("Failed to fetch bibliography:", err))
+            .finally(() => setIsLoadingBibliography(false));
+    }, [chatId]);
+
+    // Fetch bibliography when tab becomes active
+    useEffect(() => {
+        if (activeTab === 'bibliography' && isOpen && chatId) {
+            fetchBibliography();
+        }
+    }, [activeTab, isOpen, chatId, fetchBibliography]);
+
     // Focus input when sidebar opens
     useEffect(() => {
         if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
@@ -145,7 +169,7 @@ export function ChatSidebar({
     return (
         <>
             {/* Mobile backdrop */}
-            <div 
+            <div
                 className={`
                     fixed inset-0 bg-black/20 z-40 md:hidden
                     transition-opacity duration-300
@@ -205,7 +229,12 @@ export function ChatSidebar({
                                 return (
                                     <button
                                         key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
+                                        onClick={() => {
+                                            if (tab.id === 'bibliography' && isActive) {
+                                                fetchBibliography();
+                                            }
+                                            setActiveTab(tab.id);
+                                        }}
                                         className={`
                                             relative flex items-center gap-1.5 px-4 py-3
                                             text-sm font-medium transition-colors
@@ -238,18 +267,124 @@ export function ChatSidebar({
                 </header>
 
                 {/* Content Area */}
-                <main 
-                    ref={messagesContainerRef} 
+                <main
+                    ref={messagesContainerRef}
                     className="flex-1 overflow-y-auto overscroll-contain bg-white"
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     <div className="px-4 py-4 space-y-4">
                         {activeTab === 'bibliography' ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                <BookOpen className="w-10 h-10 mb-3 opacity-40" />
-                                <p className="text-sm font-medium">Sources coming soon</p>
-                                <p className="text-xs mt-1 opacity-70">Bibliography will appear here</p>
-                            </div>
+                            isLoadingBibliography ? (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                    <Loader2 className="w-8 h-8 mb-3 animate-spin text-blue-500" />
+                                    <p className="text-sm font-medium">Loading bibliography...</p>
+                                </div>
+                            ) : bibliography && Object.keys(bibliography.reference_usage).length > 0 ? (
+                                <div className="space-y-6">
+                                    {/* Helper to find citation details across all nodes */}
+                                    {(() => {
+                                        // Collect all unique citations keyed by URL
+                                        const urlToCitation = new Map<string, Citation>();
+
+                                        // Also map indices to URLs if needed, but primary key is URL from API
+                                        [...conversationNodes, ...threadNodes].forEach(node => {
+                                            node.citations?.forEach(c => {
+                                                if (c.url) urlToCitation.set(c.url, c);
+                                            });
+                                        });
+
+                                        return Object.entries(bibliography.reference_usage).map(([url, labels], idx) => {
+                                            const citation = urlToCitation.get(url);
+
+                                            // The key is the URL itself
+                                            const displayUrl = url;
+
+                                            // Try to get a nice title, otherwise use the URL or domain
+                                            let displayTitle = citation?.title;
+                                            if (!displayTitle) {
+                                                try {
+                                                    const urlObj = new URL(url);
+                                                    displayTitle = urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
+                                                } catch (e) {
+                                                    displayTitle = url;
+                                                }
+                                            }
+
+                                            // Filter out "No meaningful topic identified"
+                                            const validLabels = labels.filter(label =>
+                                                label !== "General"
+                                            );
+
+                                            // Use simple sequential numbering
+                                            const displayIndex = idx + 1;
+
+                                            return (
+                                                <div key={url} className="group relative pl-0 sm:pl-0">
+                                                    <div className="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100/60 hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-200">
+                                                        {/* Index Badge */}
+                                                        <div className="flex-shrink-0">
+                                                            <div className="
+                                                                flex items-center justify-center 
+                                                                w-6 h-6 rounded-md 
+                                                                bg-white border border-slate-200 
+                                                                text-xs font-mono font-medium text-slate-500
+                                                                group-hover:border-blue-200 group-hover:text-blue-600
+                                                                transition-colors
+                                                            ">
+                                                                {displayIndex}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Content */}
+                                                        <div className="flex-1 min-w-0 space-y-2">
+                                                            {/* Title & Link */}
+                                                            <div>
+                                                                <a
+                                                                    href={url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="group/link block"
+                                                                >
+                                                                    <h4 className="text-sm font-semibold text-slate-800 leading-snug group-hover/link:text-blue-600 transition-colors line-clamp-2">
+                                                                        {displayTitle}
+                                                                    </h4>
+                                                                    <div className="text-xs text-slate-400 font-mono mt-1 w-full truncate opacity-70 group-hover/link:opacity-100 transition-all">
+                                                                        {displayUrl}
+                                                                    </div>
+                                                                </a>
+                                                            </div>
+
+                                                            {/* Usage Labels */}
+                                                            {validLabels.length > 0 && (
+                                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                                    {validLabels.map((label, labelIdx) => (
+                                                                        <span
+                                                                            key={`${url}-${labelIdx}`}
+                                                                            className="
+                                                                                inline-flex items-center px-2 py-0.5 
+                                                                                rounded-md text-[10px] uppercase tracking-wider font-semibold 
+                                                                                bg-white border border-slate-200 text-slate-500
+                                                                            "
+                                                                        >
+                                                                            {label}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                    <BookOpen className="w-10 h-10 mb-3 opacity-40" />
+                                    <p className="text-sm font-medium">No sources found</p>
+                                    <p className="text-xs mt-1 opacity-70">Bibliography is empty</p>
+                                </div>
+                            )
                         ) : currentNodes.length === 0 && !isStreaming ? (
                             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                                 <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
@@ -274,15 +409,15 @@ export function ChatSidebar({
                                             <div className={`
                                                 inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 
                                                 rounded-full text-xs font-medium
-                                                ${node.id === activeNodeId 
-                                                    ? 'bg-blue-100 text-blue-700' 
+                                                ${node.id === activeNodeId
+                                                    ? 'bg-blue-100 text-blue-700'
                                                     : 'bg-slate-100 text-slate-500'}
                                             `}>
                                                 <span className={`w-1.5 h-1.5 rounded-full ${node.id === activeNodeId ? 'bg-blue-500' : 'bg-slate-400'}`} />
                                                 {node.label}
                                             </div>
                                         )}
-                                        
+
                                         {/* Messages */}
                                         <div className="space-y-4">
                                             {(node.payload || []).map((msg, msgIdx) => (
@@ -291,18 +426,33 @@ export function ChatSidebar({
                                                     role={msg.role}
                                                     content={msg.content}
                                                     citations={node.citations}
+                                                    onEdit={msg.role === 'user' && !isStreaming ? (text) => onEditMessage?.(node.id, text) : undefined}
                                                 />
                                             ))}
                                         </div>
                                     </section>
                                 ))}
 
-                                {/* Streaming Indicator */}
+                                {/* Optimistic User Message & Streaming Indicator */}
                                 {isStreaming && (
-                                    <div className="flex items-center gap-2 py-3 text-slate-500">
-                                        <TreviLogoAnimation size={20} />
-                                        <span className="text-sm">{statusMessage || 'Thinking...'}</span>
-                                    </div>
+                                    <>
+                                        {/* Show user message immediately */}
+                                        <div className="pt-4 border-t border-slate-100 animate-fade-in">
+                                            <MessageBubble
+                                                role="user"
+                                                content={statusMessage || ""}
+                                            />
+                                        </div>
+
+                                        {/* Status Line */}
+                                        <div className="py-2 animate-fade-in">
+                                            <StatusLine
+                                                status="exploring"
+                                                title="Exploring"
+                                                subtitle={statusMessage || "Processing..."}
+                                            />
+                                        </div>
+                                    </>
                                 )}
                             </>
                         )}

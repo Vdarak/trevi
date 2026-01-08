@@ -9,6 +9,7 @@ import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import {
   sendMessage,
+  editChatResponse,
   createNewChatRequest,
   createDirectedQueryRequest,
   createFollowUpRequest,
@@ -37,6 +38,7 @@ export default function Home() {
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
   const [connectionErrors, setConnectionErrors] = useState<ConnectionError[]>([]);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [processingQuery, setProcessingQuery] = useState<string | null>(null);
 
   // Subscribe to ConnectionManager changes
   useEffect(() => {
@@ -105,7 +107,8 @@ export default function Home() {
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
     setIsCreatingChat(true);
-    setStatusMessage("Connecting...");
+    setStatusMessage(message);
+    setProcessingQuery(message);
     setIsStreaming(true);
 
     try {
@@ -144,6 +147,7 @@ export default function Home() {
 
           setIsStreaming(false);
           setStatusMessage("");
+          setProcessingQuery(null);
           setIsLoading(false);
           setIsCreatingChat(false);
 
@@ -156,6 +160,7 @@ export default function Home() {
           setIsLoading(false);
           setIsCreatingChat(false);
           setIsStreaming(false);
+          setProcessingQuery(null);
         }
       );
     } catch (error) {
@@ -164,6 +169,7 @@ export default function Home() {
       setIsLoading(false);
       setIsCreatingChat(false);
       setIsStreaming(false);
+      setProcessingQuery(null);
       setPendingChats([]); // Clear pending on error
     }
   }, [rootNodeId]);
@@ -173,7 +179,8 @@ export default function Home() {
     if (!currentChatId || !currentNodeId || isStreaming) return;
 
     setIsStreaming(true);
-    setStatusMessage("Connecting...");
+    setStatusMessage(message);
+    setProcessingQuery(message);
 
     try {
       const request = createFollowUpRequest(message, currentChatId, currentNodeId);
@@ -195,19 +202,51 @@ export default function Home() {
 
           setIsStreaming(false);
           setStatusMessage("");
+          setProcessingQuery(null);
         },
         (error) => {
           console.error("Follow-up error:", error);
           setStatusMessage(`Error: ${error.error}`);
           setIsStreaming(false);
+          setProcessingQuery(null);
         }
       );
     } catch (error) {
       console.error("Failed to send follow-up:", error);
       setStatusMessage("Failed to send message");
       setIsStreaming(false);
+      setProcessingQuery(null);
     }
   }, [currentChatId, currentNodeId, isStreaming]);
+
+  const handleEditMessage = useCallback(async (nodeId: string, newMessage: string) => {
+    if (!currentChatId || isStreaming) return;
+
+    setIsStreaming(true);
+    setStatusMessage(newMessage); // Show the new query as status
+    setProcessingQuery(newMessage);
+
+    try {
+      const response = await editChatResponse(currentChatId, nodeId, newMessage);
+
+      // Update state with new node
+      setCurrentNodeId(response.node_id);
+
+      // Refresh graph to reflect changes (subtree deletion and new path)
+      const graphResponse = await getGraph(currentChatId);
+      const { nodes } = buildGraphNodesFromResponse(graphResponse);
+      setGraphNodes(nodes);
+
+      setIsStreaming(false);
+      setStatusMessage("");
+      setProcessingQuery(null);
+    } catch (error) {
+      console.error("Failed to edit message:", error);
+      setStatusMessage("Failed to edit message");
+      setIsStreaming(false);
+      setProcessingQuery(null);
+    }
+  }, [currentChatId, isStreaming]);
 
   // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
@@ -353,7 +392,8 @@ export default function Home() {
     if (!currentChatId || isNodeStreaming) return;
 
     setIsNodeStreaming(true);
-    setNodeStatusMessage("Connecting...");
+    setNodeStatusMessage(message);
+    setProcessingQuery(message);
 
     try {
       const request = createFollowUpRequest(message, currentChatId, nodeId);
@@ -377,17 +417,20 @@ export default function Home() {
 
           setIsNodeStreaming(false);
           setNodeStatusMessage("");
+          setProcessingQuery(null);
         },
         (error) => {
           console.error("Node message error:", error);
           setNodeStatusMessage(`Error: ${error.error}`);
           setIsNodeStreaming(false);
+          setProcessingQuery(null);
         }
       );
     } catch (error) {
       console.error("Failed to send node message:", error);
       setNodeStatusMessage("Failed to send message");
       setIsNodeStreaming(false);
+      setProcessingQuery(null);
     }
   }, [currentChatId, isNodeStreaming]);
 
@@ -486,14 +529,16 @@ export default function Home() {
                 isNodeStreaming={isNodeStreaming}
                 nodeStatusMessage={nodeStatusMessage}
                 globalStatus={{
-                  isActive: isStreaming || isLoading || loadingNodeIds.size > 0,
-                  message: statusMessage,
-                  type: isStreaming ? 'streaming' : loadingNodeIds.size > 0 ? 'exploring' : 'idle',
+                  isActive: isStreaming || isNodeStreaming || isLoading || loadingNodeIds.size > 0,
+                  message: statusMessage || nodeStatusMessage,
+                  type: (isStreaming || isNodeStreaming) ? 'streaming' : loadingNodeIds.size > 0 ? 'exploring' : 'idle',
                   activeNodeLabel: graphNodes.find(n => n.id === currentNodeId)?.label,
                   exploringNodeIds: Array.from(loadingNodeIds),
-                  exploringNodeLabels: Array.from(loadingNodeIds)
-                    .map(id => graphNodes.find(n => n.id === id)?.label)
-                    .filter((label): label is string => !!label),
+                  exploringNodeLabels: processingQuery
+                    ? [processingQuery]
+                    : Array.from(loadingNodeIds)
+                      .map(id => graphNodes.find(n => n.id === id)?.label)
+                      .filter((label): label is string => !!label),
                   errors: connectionErrors
                 }}
               />
@@ -514,6 +559,7 @@ export default function Home() {
         `}>
           <ChatSidebar
             isOpen={isChatSidebarOpen || (mobileActiveTab === 'chat' && showGraphPage)}
+            chatId={currentChatId || undefined}
             conversationNodes={conversationNodes}
             threadNodes={threadNodes}
             rootLabel={graphNodes.find(n => n.id === rootNodeId)?.label || 'Conversation'}
@@ -522,6 +568,7 @@ export default function Home() {
             isStreaming={isStreaming}
             statusMessage={statusMessage}
             onSendMessage={handleSidebarMessage}
+            onEditMessage={handleEditMessage}
             onClose={() => { setIsChatSidebarOpen(false); setMobileActiveTab('graph'); }}
           />
         </div>

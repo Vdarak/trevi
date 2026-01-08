@@ -4,6 +4,8 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Compass } from 'lucide-react';
 import { ConceptNodeData } from '../types';
+import { StatusLine } from '@/components/ui/status-line';
+import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 
 // ============================================================================
 // Chevron Icons
@@ -147,29 +149,36 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
                     <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />
                 )}
 
-                {/* Loading animation - rotating explore icon */}
-                {data.isLoading && !isClickableDirection && (
-                    <div className="flex-shrink-0 w-5 h-5 text-blue-500 animate-spin-pulse">
-                        <ExploreIcon />
+                {/* Loading animation - Full Status Line replacement */}
+                {data.isLoading && !isClickableDirection ? (
+                    <div className="flex items-center">
+                        <StatusLine
+                            status="exploring"
+                            title="Exploring"
+                            subtitle={data.label}
+                            className="scale-90 origin-left"
+                        />
                     </div>
-                )}
+                ) : (
+                    <>
+                        {/* Node label */}
+                        <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
+                            {data.label}
+                        </div>
 
-                {/* Node label */}
-                <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
-                    {data.label}
-                </div>
-
-                {/* Explore icon for direction nodes - on right inside node */}
-                {isClickableDirection && (
-                    <div className={`
-            flex-shrink-0 w-5 h-5 ml-1 transition-all duration-200
-            ${data.isLoading
-                            ? 'text-blue-500 animate-spin-pulse'
-                            : 'text-blue-400 hover:text-blue-600 hover:scale-110 active:scale-95 active:text-blue-700'
-                        }
-          `}>
-                        <ExploreIcon />
-                    </div>
+                        {/* Explore icon for direction nodes - on right inside node */}
+                        {isClickableDirection && (
+                            <div className={`
+                                flex-shrink-0 w-5 h-5 ml-1 transition-all duration-200
+                                ${data.isLoading
+                                    ? 'text-blue-500 animate-spin-pulse'
+                                    : 'text-blue-400 hover:text-blue-600 hover:scale-110 active:scale-95 active:text-blue-700'
+                                }
+                            `}>
+                                <Compass className="w-full h-full" strokeWidth={2} />
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {/* Source Handle for nodes WITHOUT children (leaf nodes) */}

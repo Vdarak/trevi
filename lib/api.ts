@@ -134,6 +134,12 @@ export type SSEEvent =
   | { type: "complete"; data: CompleteEvent }
   | { type: "error"; data: ErrorEvent };
 
+/** Bibliography response from /sessions/bibliography */
+export interface BibliographyResponse {
+  chat_id: string;
+  reference_usage: Record<string, string[]>; // URL/Key -> Array of Node IDs
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -521,6 +527,74 @@ export async function deleteNode(chatId: string, nodeId: string): Promise<Delete
 
   if (!response.ok) {
     throw new Error(`Failed to delete node: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// ============================================================================
+
+/** Response from edit chat API */
+export interface EditChatResponse {
+  session_id: string;
+  chat_id: string;
+  node_id: string; // The NEW node ID created after edit
+  payload: MessagePayload[];
+}
+
+/**
+ * Edits a previous query and regenerates the response using classification-based placement.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID of the query to edit
+ * @param newQuery - The new query text
+ * @returns The response containing the new node ID and payload
+ */
+export async function editChatResponse(
+  chatId: string,
+  nodeId: string,
+  newQuery: string
+): Promise<EditChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/chat/edit`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      node_id: nodeId,
+      query: newQuery
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to edit chat response: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/** Bibliography response from /sessions/bibliography */
+export interface BibliographyResponse {
+  chat_id: string;
+  reference_usage: Record<string, string[]>; // URL/Key -> Array of Node IDs
+}
+
+/**
+ * Fetches the bibliography for a chat session.
+ * 
+ * @param chatId - The chat ID
+ * @returns Bibliography data mapping references to node usage
+ */
+export async function getBibliography(chatId: string): Promise<BibliographyResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/bibliography`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch bibliography: ${response.statusText}`);
   }
 
   return response.json();
