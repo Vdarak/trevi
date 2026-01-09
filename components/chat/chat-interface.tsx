@@ -33,7 +33,7 @@ function AudioLevelBars({ level, isActive }: { level: number; isActive: boolean 
         return (
           <div
             key={i}
-            className={`w-1 rounded-full transition-all duration-100 ease-out ${isActive ? 'bg-red-500' : 'bg-slate-400'
+            className={`w-1 rounded-full transition-all duration-100 ease-out ${isActive ? 'bg-destructive' : 'bg-muted-foreground'
               }`}
             style={{
               height: `${dynamicHeight}px`,
@@ -117,8 +117,8 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
   return (
     <div className="flex flex-col items-center justify-center h-full max-w-3xl mx-auto px-4 w-full">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold tracking-tight mb-4 text-slate-900">Explore Anything</h1>
-        <p className="text-slate-500 text-lg">
+        <h1 className="text-4xl font-bold tracking-tight mb-4 text-foreground">Explore Anything</h1>
+        <p className="text-muted-foreground text-lg">
           Research and explore any topic.
         </p>
       </div>
@@ -126,21 +126,21 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       <form onSubmit={handleSubmit} className="w-full relative mb-8">
         {/* Voice listening indicator above input */}
         {isListening && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full">
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 bg-destructive/10 border border-destructive/20 rounded-full">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive/75 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive"></span>
             </span>
-            <span className="text-xs font-medium text-red-600">Listening...</span>
+            <span className="text-xs font-medium text-destructive">Listening...</span>
             <AudioLevelBars level={audioLevel} isActive={isListening} />
           </div>
         )}
 
         <Input
           placeholder={isListening ? "Speak now..." : "Start typing..."}
-          className={`h-14 pl-6 pr-24 rounded-full shadow-sm text-lg text-slate-900 transition-all ${isListening
-            ? 'border-red-300 ring-2 ring-red-100'
-            : 'border-slate-200'
+          className={`h-14 pl-6 pr-24 rounded-full shadow-sm text-lg transition-all ${isListening
+            ? 'border-destructive/30 ring-2 ring-destructive/10'
+            : ''
             }`}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -153,8 +153,8 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
             size="icon"
             variant="ghost"
             className={`rounded-full transition-all ${isListening
-              ? 'bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-700'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+              : ''
               }`}
             disabled={isLoading}
             onClick={handleMicClick}
@@ -164,7 +164,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
               <div className="relative">
                 <MicOff className="w-5 h-5" />
                 {/* Pulsing ring when active */}
-                <span className="absolute inset-0 rounded-full animate-ping bg-red-400 opacity-20" />
+                <span className="absolute inset-0 rounded-full animate-ping bg-destructive/20 opacity-20" />
               </div>
             ) : (
               <Mic className="w-5 h-5" />
@@ -173,7 +173,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
           <Button
             type="submit"
             size="icon"
-            className="rounded-full bg-slate-900 hover:bg-slate-800"
+            className="rounded-full"
             disabled={isLoading || !message.trim()}
           >
             {isLoading ? (
@@ -187,14 +187,14 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
 
       {/* Voice Error Message */}
       {voiceError && (
-        <div className="mb-4 text-sm text-red-500">
+        <div className="mb-4 text-sm text-destructive">
           {voiceError}
         </div>
       )}
 
       {/* Status Message */}
       {isLoading && statusMessage && (
-        <div className="mb-8 flex items-center gap-2 text-slate-600">
+        <div className="mb-8 flex items-center gap-2 text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm">{statusMessage}</span>
         </div>
@@ -204,22 +204,22 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       {!isLoading && !isListening && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
           <Card
-            className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
+            className="p-4 hover:bg-muted/50 cursor-pointer transition-colors shadow-none"
             onClick={() => handleSuggestionClick("What will be the weather tomorrow")}
           >
-            <p className="text-sm font-medium text-slate-700">What will be the weather tomorrow</p>
+            <p className="text-sm font-medium text-foreground">What will be the weather tomorrow</p>
           </Card>
           <Card
-            className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
+            className="p-4 hover:bg-muted/50 cursor-pointer transition-colors shadow-none"
             onClick={() => handleSuggestionClick("How does rocket ships work in general")}
           >
-            <p className="text-sm font-medium text-slate-700">How does rocket ships work in general</p>
+            <p className="text-sm font-medium text-foreground">How does rocket ships work in general</p>
           </Card>
           <Card
-            className="p-4 hover:bg-slate-50 cursor-pointer transition-colors border-slate-200 shadow-none"
+            className="p-4 hover:bg-muted/50 cursor-pointer transition-colors shadow-none"
             onClick={() => handleSuggestionClick("Corresponding grammatical structure")}
           >
-            <p className="text-sm font-medium text-slate-700">Corresponding grammatical structure</p>
+            <p className="text-sm font-medium text-foreground">Corresponding grammatical structure</p>
           </Card>
         </div>
       )}

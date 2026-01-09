@@ -30,7 +30,7 @@ export function GraphLoading() {
   }, [messageIndex]);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-white">
+    <div className="flex flex-col items-center justify-center h-full w-full bg-background">
       {/* Trevi Logo Animation - Responsive sizing */}
       <div className="mb-8">
         {/* Mobile: 40dvw (dynamic viewport width), capped at 200px */}
@@ -47,7 +47,7 @@ export function GraphLoading() {
       <div className="text-center">
         <p
           key={messageIndex}
-          className="text-xl font-medium text-slate-700 animate-fade-in"
+          className="text-xl font-medium text-foreground animate-fade-in"
         >
           {loadingMessages[messageIndex]}
         </p>
