@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Citation } from '@/lib/api';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { InlineResponseFeedback } from '@/components/feedback/quick-feedback';
 
 interface MessageBubbleProps {
     role: 'user' | 'assistant';
@@ -10,9 +11,10 @@ interface MessageBubbleProps {
     isStreaming?: boolean;
     citations?: Citation[];
     onEdit?: (newContent: string) => void;
+    nodeId?: string;
 }
 
-export function MessageBubble({ role, content, isStreaming, citations, onEdit }: MessageBubbleProps) {
+export function MessageBubble({ role, content, isStreaming, citations, onEdit, nodeId }: MessageBubbleProps) {
     const isUser = role === 'user';
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(content);
@@ -117,6 +119,13 @@ export function MessageBubble({ role, content, isStreaming, citations, onEdit }:
                     <div className="text-xs leading-relaxed text-slate-700">
                         <MarkdownRenderer content={content} citations={citations} />
                     </div>
+
+                    {/* Feedback + Copy buttons - Always visible */}
+                    {!isStreaming && (
+                        <div className="mt-2">
+                            <InlineResponseFeedback nodeId={nodeId} content={content} />
+                        </div>
+                    )}
 
                     {/* Streaming indicator */}
                     {isStreaming && (

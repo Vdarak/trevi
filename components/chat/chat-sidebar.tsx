@@ -5,6 +5,7 @@ import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical } from '
 import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import { StatusLine } from '@/components/ui/status-line';
+import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { getBibliography } from '@/lib/api';
 import type { MessagePayload, Citation, BibliographyResponse } from '@/lib/api';
 
@@ -38,7 +39,7 @@ const tabs = [
     { id: 'bibliography' as TabType, label: 'Bibliography', icon: BookOpen },
 ];
 
-const MIN_WIDTH = 400;
+const MIN_WIDTH = 440;
 const MAX_WIDTH_VW = 50;
 
 export function ChatSidebar({
@@ -264,12 +265,20 @@ export function ChatSidebar({
                                 );
                             })}
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="p-2 mr-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-1 mr-1">
+                            <QuickFeedback
+                                context="component"
+                                componentName="chat_sidebar"
+                                popoverPosition="bottom"
+                                size="md"
+                            />
+                            <button
+                                onClick={onClose}
+                                className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Context Title */}

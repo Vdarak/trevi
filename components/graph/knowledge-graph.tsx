@@ -35,6 +35,7 @@ import { DeletableEdge, type DeletableEdgeData } from './edges/deletable-edge';
 import { Tooltip } from './ui/tooltip';
 import { ToolbarButton } from './ui/toolbar-button';
 import { StatusPill } from './ui/status-pill';
+import { QuickFeedback, PeriodicFeedbackPrompt, TreviDisclaimer } from '@/components/feedback/quick-feedback';
 
 // Re-export types for external use
 export type { GraphNode, KnowledgeGraphProps } from './types';
@@ -71,6 +72,44 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [viewMode, setViewMode] = useState<'panel' | 'modal'>('modal'); // Toggle between panel and modal view
   const [isStatusPillExpanded, setIsStatusPillExpanded] = useState(false); // Toggle for status pill dropdown
   const [statusPillWarning, setStatusPillWarning] = useState<string | undefined>(undefined); // Temporary warning message for status pill
+
+  // Periodic feedback prompt state
+  const [showPeriodicFeedback, setShowPeriodicFeedback] = useState(false);
+  const periodicFeedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFeedbackDismissRef = useRef<number>(0);
+
+  // Start periodic feedback timer when graph has nodes
+  useEffect(() => {
+    // Only start timer if we have nodes and haven't shown feedback recently
+    if (graphNodes.length > 0 && !showPeriodicFeedback) {
+      // Clear any existing timer
+      if (periodicFeedbackTimerRef.current) {
+        clearTimeout(periodicFeedbackTimerRef.current);
+      }
+      
+      // Check if 5 minutes have passed since last dismiss
+      const timeSinceLastDismiss = Date.now() - lastFeedbackDismissRef.current;
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      // Set timer for 5 minutes (or remaining time if recently dismissed)
+      const timeToWait = Math.max(fiveMinutes - timeSinceLastDismiss, fiveMinutes);
+      
+      periodicFeedbackTimerRef.current = setTimeout(() => {
+        setShowPeriodicFeedback(true);
+      }, timeToWait);
+    }
+    
+    return () => {
+      if (periodicFeedbackTimerRef.current) {
+        clearTimeout(periodicFeedbackTimerRef.current);
+      }
+    };
+  }, [graphNodes.length, showPeriodicFeedback]);
+
+  const handleDismissPeriodicFeedback = useCallback(() => {
+    setShowPeriodicFeedback(false);
+    lastFeedbackDismissRef.current = Date.now();
+  }, []);
 
   // Modal state for center modal view
   const [modalData, setModalData] = useState<{
@@ -803,6 +842,11 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   return (
     <div ref={containerRef} className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
+      {/* Periodic Feedback Prompt */}
+      {showPeriodicFeedback && (
+        <PeriodicFeedbackPrompt onDismiss={handleDismissPeriodicFeedback} />
+      )}
+
       {/* Global Status Pill - Top Center */}
       {/* Global Status Pill - Top Center */}
       {globalStatus && (
@@ -815,6 +859,9 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           />
         </div>
       )}
+
+      {/* Disclaimer - Bottom Center */}
+      <TreviDisclaimer />
 
       {/* Chat Toggle Button - Top Right (hidden on mobile, we have tab navigation) */}
       {onToggleChatSidebar && (
@@ -832,6 +879,17 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
       {/* Control Buttons - Bottom Left - Vertically Stacked Groups */}
       <div className="absolute bottom-4 left-4 z-30 flex flex-col gap-2">
+        {/* Quick Feedback */}
+        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+          <QuickFeedback
+            context="canvas"
+            componentName="topic_tree_canvas"
+            popoverPosition="right"
+            size="lg"
+            vertical
+          />
+        </div>
+
         {/* View Mode Toggle (Panel vs Modal) */}
         <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
           <ToolbarButton

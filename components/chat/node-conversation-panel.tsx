@@ -5,6 +5,7 @@ import { X, Send } from 'lucide-react';
 import type { MessagePayload, Citation } from '@/lib/api';
 import { StatusLine } from '@/components/ui/status-line';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { QuickFeedback } from '@/components/feedback/quick-feedback';
 
 interface NodeConversationPanelProps {
     isOpen: boolean;
@@ -77,15 +78,23 @@ export function NodeConversationPanel({
         >
             {/* Header with title and close button */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex-shrink-0">
-                <h3 className="font-semibold text-slate-800 text-sm truncate pr-4 flex-1">
+                <h3 className="font-semibold text-slate-800 text-sm truncate pr-2 flex-1">
                     {nodeLabel || 'Conversation'}
                 </h3>
-                <button
-                    onClick={onClose}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
-                >
-                    <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                    <QuickFeedback
+                        context="component"
+                        componentName="node_panel"
+                        popoverPosition="bottom"
+                        size="sm"
+                    />
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             {/* Scrollable content */}
@@ -234,12 +243,20 @@ export function NodeConversationModal({
                     <h3 className="font-semibold text-slate-800 text-base truncate pr-4 flex-1">
                         {nodeLabel || 'Conversation'}
                     </h3>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                        <QuickFeedback
+                            context="component"
+                            componentName="node_modal"
+                            popoverPosition="bottom"
+                            size="sm"
+                        />
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Scrollable content */}

@@ -5,6 +5,7 @@ import { Handle, Position } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { ConversationPanelNodeData } from '../types';
 import { renderSimpleMarkdown } from '../ui/markdown';
+import { QuickFeedback } from '@/components/feedback/quick-feedback';
 
 /**
  * Conversation panel with title bar, content, and chat input.
@@ -54,15 +55,23 @@ export function ConversationPanelNode({ data }: { data: ConversationPanelNodeDat
                 <h3 className="font-semibold text-slate-800 text-sm truncate pr-4 flex-1">
                     {data.label || 'Conversation'}
                 </h3>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        data.onClose();
-                    }}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
-                >
-                    <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                    <QuickFeedback
+                        context="component"
+                        componentName="graph_panel"
+                        popoverPosition="bottom"
+                        size="sm"
+                    />
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            data.onClose();
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             {/* Scrollable AI content - clean reading experience */}
