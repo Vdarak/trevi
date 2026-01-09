@@ -96,10 +96,10 @@ export function TreviLanding() {
     // Show loading while checking if user has already onboarded
     if (isCheckingAuth) {
         return (
-            <div className="flex min-h-screen w-full items-center justify-center bg-slate-50">
+            <div className="flex min-h-screen w-full items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-6">
                     <TreviLogoAnimation size={120} />
-                    <p className="text-slate-500 text-sm">Loading...</p>
+                    <p className="text-muted-foreground text-sm">Loading...</p>
                 </div>
             </div>
         );
@@ -125,11 +125,11 @@ export function TreviLanding() {
     return (
         <div className="flex min-h-screen w-full flex-col lg:flex-row">
             {/* Left Side - Branding (60-65% width) - Light Theme */}
-            <div className="flex w-full flex-col items-center justify-center bg-slate-50 px-4 py-12 lg:w-[65vw] lg:px-12 relative overflow-hidden text-slate-900">
+            <div className="flex w-full flex-col items-center justify-center bg-muted/30 px-4 py-12 lg:w-[65vw] lg:px-12 relative overflow-hidden text-foreground">
 
                 <div className="flex flex-col items-center max-w-3xl w-full space-y-8 lg:space-y-12 z-10">
                     {/* Welcome Text */}
-                    <p className="text-slate-500 text-xs lg:text-sm tracking-widest uppercase font-medium animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <p className="text-muted-foreground text-xs lg:text-sm tracking-widest uppercase font-medium animate-in fade-in slide-in-from-bottom-4 duration-700">
                         Welcome to Trevi Pilot Test
                     </p>
 
@@ -146,32 +146,32 @@ export function TreviLanding() {
             */}
 
                         <div className="hidden lg:block">
-                            <TreviLogoStatic size={160} className="bg-slate-900 text-white" />
+                            <TreviLogoStatic size={160} className="bg-primary text-primary-foreground" />
                         </div>
                         <div className="block lg:hidden">
-                            <TreviLogoStatic size={60} className="bg-slate-900 text-white" />
+                            <TreviLogoStatic size={60} className="bg-primary text-primary-foreground" />
                         </div>
 
-                        <h1 className="text-5xl lg:text-[9rem] font-bold text-slate-900 leading-none tracking-tighter" style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}>
+                        <h1 className="text-5xl lg:text-[9rem] font-bold text-foreground leading-none tracking-tighter" style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}>
                             trevi
                         </h1>
                     </div>
 
                     {/* Tagline */}
-                    <p className="text-slate-600 text-lg lg:text-2xl font-light tracking-wide animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 text-center">
-                        explore your <span className="text-blue-600 font-medium">curiosity</span>
+                    <p className="text-muted-foreground text-lg lg:text-2xl font-light tracking-wide animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 text-center">
+                        explore your <span className="text-primary font-medium">curiosity</span>
                     </p>
                 </div>
             </div>
 
             {/* Right Side - Form */}
-            <div className="flex w-full flex-1 flex-col items-center justify-center bg-white px-8 py-12 lg:px-16 border-l border-slate-100">
+            <div className="flex w-full flex-1 flex-col items-center justify-center bg-background px-8 py-12 lg:px-16 border-l border-border">
                 <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-right-8 duration-700 delay-150">
                     <div className="space-y-2 text-center lg:text-left">
-                        <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+                        <h2 className="text-3xl font-bold tracking-tight text-foreground">
                             Get Started
                         </h2>
-                        <p className="text-slate-500">
+                        <p className="text-muted-foreground">
                             Enter your details to begin exploring.
                         </p>
                     </div>
@@ -182,7 +182,7 @@ export function TreviLanding() {
                                 <div className="space-y-2">
                                     <label
                                         htmlFor="firstName"
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-700"
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
                                     >
                                         First Name
                                     </label>
@@ -192,14 +192,14 @@ export function TreviLanding() {
                                         placeholder="Jane"
                                         value={formData.firstName}
                                         onChange={handleChange}
-                                        className="bg-slate-50 border-slate-200 h-12"
+                                        className="h-12"
                                     />
                                 </div>
 
                                 <div className="space-y-2">
                                     <label
                                         htmlFor="lastName"
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-700"
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
                                     >
                                         Last Name
                                     </label>
@@ -209,7 +209,7 @@ export function TreviLanding() {
                                         placeholder="Doe"
                                         value={formData.lastName}
                                         onChange={handleChange}
-                                        className="bg-slate-50 border-slate-200 h-12"
+                                        className="h-12"
                                     />
                                 </div>
                             </div>
@@ -217,7 +217,7 @@ export function TreviLanding() {
                             <div className="space-y-2">
                                 <label
                                     htmlFor="email"
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-700"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
                                 >
                                     Email
                                 </label>
@@ -228,14 +228,14 @@ export function TreviLanding() {
                                     placeholder="jane@example.com"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="bg-slate-50 border-slate-200 h-12"
+                                    className="h-12"
                                 />
                             </div>
                         </div>
 
                         {/* Error message */}
                         {submitError && (
-                            <p className="text-sm text-red-600 text-center">
+                            <p className="text-sm text-destructive text-center">
                                 {submitError}
                             </p>
                         )}
@@ -243,7 +243,7 @@ export function TreviLanding() {
                         <Button
                             type="submit"
                             disabled={!isFormValid || isSubmitting}
-                            className="w-full h-12 text-base group bg-slate-900 hover:bg-slate-800"
+                            className="w-full h-12 text-base group"
                             size="lg"
                         >
                             {isSubmitting ? (

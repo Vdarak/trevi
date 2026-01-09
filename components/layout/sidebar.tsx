@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Menu, X } from 'lucide-react';
+import { Trash2, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { ThemeToggle } from '@/components/theme-toggle';

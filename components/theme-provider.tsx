@@ -13,18 +13,27 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("system");
+  const [mounted, setMounted] = useState(false);
+  const [theme, setThemeState] = useState<Theme>("system");
   const [effectiveTheme, setEffectiveTheme] = useState<"light" | "dark">("light");
 
+  // Load saved theme from localStorage on mount
   useEffect(() => {
-    // Load saved theme from localStorage
+    setMounted(true);
     const savedTheme = localStorage.getItem("theme") as Theme | null;
     if (savedTheme) {
-      setTheme(savedTheme);
+      setThemeState(savedTheme);
     }
   }, []);
 
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
+
   useEffect(() => {
+    if (!mounted) return;
+
     const root = window.document.documentElement;
     
     // Remove existing theme classes
@@ -43,10 +52,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     root.classList.add(resolvedTheme);
     setEffectiveTheme(resolvedTheme);
-
-    // Save to localStorage
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   // Listen for system theme changes
   useEffect(() => {
