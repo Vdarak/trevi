@@ -1,20 +1,52 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TreviLogoStatic } from "@/components/ui/trevi-logo";
+import { useRouter } from "next/navigation";
+import { TreviLogoStatic, TreviLogoAnimation } from "@/components/ui/trevi-logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { setUserMetadata, getUserMetadata, getChats } from "@/lib/api";
 
 export function TreviLanding() {
+    const router = useRouter();
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [formData, setFormData] = useState({
         firstName: "",
         lastName: "",
         email: "",
     });
     const [isFormValid, setIsFormValid] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [showTour, setShowTour] = useState(false);
+
+    // Check if user has already completed onboarding on mount
+    useEffect(() => {
+        const checkUserStatus = async () => {
+            try {
+                // Hit both APIs simultaneously as required
+                const [userMetadata] = await Promise.all([
+                    getUserMetadata(),
+                    getChats(), // Also hit chats API as per requirement
+                ]);
+
+                // If user has already completed onboarding, redirect to home
+                if (userMetadata.has_user_info) {
+                    router.replace('/');
+                    return;
+                }
+            } catch (error) {
+                console.error("Failed to check user status:", error);
+                // On error, allow them to proceed with onboarding
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+
+        checkUserStatus();
+    }, [router]);
 
     useEffect(() => {
         const { firstName, lastName, email } = formData;
@@ -32,15 +64,46 @@ export function TreviLanding() {
             ...prev,
             [name]: value,
         }));
+        // Clear error when user starts typing
+        if (submitError) setSubmitError(null);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isFormValid) {
-            console.log("Form submitted:", formData);
+        if (!isFormValid || isSubmitting) return;
+
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        try {
+            // Call API to store user metadata
+            await setUserMetadata({
+                email: formData.email.trim(),
+                first_name: formData.firstName.trim(),
+                last_name: formData.lastName.trim(),
+            });
+
+            console.log("User metadata saved successfully");
             setShowTour(true);
+        } catch (error) {
+            console.error("Failed to save user metadata:", error);
+            setSubmitError("Failed to save your information. Please try again.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
+
+    // Show loading while checking if user has already onboarded
+    if (isCheckingAuth) {
+        return (
+            <div className="flex min-h-screen w-full items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-6">
+                    <TreviLogoAnimation size={120} />
+                    <p className="text-slate-500 text-sm">Loading...</p>
+                </div>
+            </div>
+        );
+    }
 
     if (showTour) {
         return (
@@ -170,14 +233,30 @@ export function TreviLanding() {
                             </div>
                         </div>
 
+                        {/* Error message */}
+                        {submitError && (
+                            <p className="text-sm text-red-600 text-center">
+                                {submitError}
+                            </p>
+                        )}
+
                         <Button
                             type="submit"
-                            disabled={!isFormValid}
+                            disabled={!isFormValid || isSubmitting}
                             className="w-full h-12 text-base group bg-slate-900 hover:bg-slate-800"
                             size="lg"
                         >
-                            Start Exploring
-                            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    Start Exploring
+                                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                </>
+                            )}
                         </Button>
                     </form>
                 </div>

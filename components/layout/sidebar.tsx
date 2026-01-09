@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Trash2, Plus, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
-import { getChats, deleteChat, formatRelativeTime, type Chat } from '@/lib/api';
+import { getChats, deleteChat, formatRelativeTime, getUserMetadata, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
 
 interface PendingChat {
@@ -39,31 +40,44 @@ export function Sidebar({
   onMobileClose,
   ...props
 }: SidebarProps) {
+  const router = useRouter();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
 
-  const fetchChats = async () => {
+  const fetchChatsAndCheckUser = async () => {
     try {
-      const response = await getChats();
-      setChats(response.chats);
+      // Fetch chats and user metadata simultaneously
+      const [chatsResponse, userMetadata] = await Promise.all([
+        getChats(),
+        getUserMetadata(),
+      ]);
+
+      // Check if user needs onboarding
+      if (!userMetadata.has_user_info) {
+        router.push('/welcome');
+        return;
+      }
+
+      setChats(chatsResponse.chats);
     } catch (error) {
-      console.error("Failed to fetch chats:", error);
+      console.error("Failed to fetch data:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchChats();
+    fetchChatsAndCheckUser();
   }, []);
 
   // Refresh chats when a new chat might have been created
   useEffect(() => {
     if (selectedChatId) {
-      fetchChats();
+      // Only fetch chats, user is already verified
+      getChats().then(response => setChats(response.chats)).catch(console.error);
     }
   }, [selectedChatId]);
 
@@ -77,7 +91,9 @@ export function Sidebar({
     setDeletingChatId(chatId);
     try {
       await deleteChat(chatId);
-      await fetchChats();
+      // Refresh chats after deletion
+      const response = await getChats();
+      setChats(response.chats);
       onChatDeleted?.();
     } catch (error) {
       console.error("Failed to delete chat:", error);

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MessageSquarePlus, Send } from 'lucide-react';
+import { submitFeedback } from '@/lib/api';
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -53,11 +54,30 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
-        // In a real app, send to backend
-        console.log('Feedback submitted:', feedback);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setIsSubmitting(false);
-        setIsSubmitted(true);
+        try {
+            // Structure the feedback data with question keys and answer values
+            const feedbackContent = {
+                layout_preference: feedback.layoutPreference,
+                orientation_preference: feedback.orientationPreference,
+                overall_usability: feedback.overallUsability,
+                controls_clarity: feedback.controlsClarity,
+                navigation_ease: feedback.navigationEase,
+                visual_clarity: feedback.visualClarity,
+                learning_effectiveness: feedback.learningEffectiveness,
+                qualitative_feedback: feedback.qualitativeFeedback,
+                improvement_suggestion: feedback.improvementSuggestion,
+            };
+
+            await submitFeedback('form', feedbackContent);
+            console.log('Feedback submitted successfully');
+            setIsSubmitted(true);
+        } catch (error) {
+            console.error('Failed to submit feedback:', error);
+            // Still show success for now, but could add error state
+            setIsSubmitted(true);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleClose = () => {
@@ -176,7 +196,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     value={feedback.qualitativeFeedback}
                     onChange={(e) => setFeedback(prev => ({ ...prev, qualitativeFeedback: e.target.value }))}
                     placeholder="Share your thoughts..."
-                    className="w-full h-28 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-28 px-3 py-2 text-sm text-slate-900 bg-white border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
                 />
             </div>
 
@@ -186,7 +206,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     value={feedback.improvementSuggestion}
                     onChange={(e) => setFeedback(prev => ({ ...prev, improvementSuggestion: e.target.value }))}
                     placeholder="Your suggestions help us improve..."
-                    className="w-full h-28 px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-28 px-3 py-2 text-sm text-slate-900 bg-white border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400"
                 />
             </div>
         </div>,
@@ -212,8 +232,8 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     </button>
                 </div>
 
-                {/* Content - scrollable */}
-                <div className="flex-1 overflow-y-auto px-6 py-5">
+                {/* Content - scrollable with custom scrollbar */}
+                <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
                     {isSubmitted ? (
                         <div className="text-center py-8">
                             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">

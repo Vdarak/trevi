@@ -140,9 +140,74 @@ export interface BibliographyResponse {
   reference_usage: Record<string, string[]>; // URL/Key -> Array of Node IDs
 }
 
+/** User metadata response from /sessions/user-metadata */
+export interface UserMetadataResponse {
+  has_user_info: boolean;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  provided_at?: string;
+}
+
+/** User metadata request for POST /sessions/user-metadata */
+export interface UserMetadataRequest {
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
+
+/**
+ * Fetches user metadata for the current session.
+ * Used to check if user has provided their info for onboarding.
+ * 
+ * @returns User metadata with has_user_info flag
+ * 
+ * @example
+ * const { has_user_info, email } = await getUserMetadata();
+ * if (!has_user_info) redirect('/welcome');
+ */
+export async function getUserMetadata(): Promise<UserMetadataResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/user-metadata`, {
+    ...defaultOptions,
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user metadata: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Stores user metadata in the current session.
+ * Called after user completes onboarding form.
+ * 
+ * @param data - User's email and name
+ * @returns Updated user metadata
+ * 
+ * @example
+ * await setUserMetadata({ email: "user@example.com", first_name: "Jane", last_name: "Doe" });
+ */
+export async function setUserMetadata(data: UserMetadataRequest): Promise<UserMetadataResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/user-metadata`, {
+    ...defaultOptions,
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to set user metadata: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 /**
  * Fetches all chats for the current session.
@@ -631,4 +696,56 @@ export function formatRelativeTime(dateString: string): string {
   if (diffDays < 7) return `${diffDays} days ago`;
 
   return date.toLocaleDateString();
+}
+
+// ============================================================================
+// Feedback API
+// ============================================================================
+
+/** Feedback type - form (detailed) or quick (simple reaction) */
+export type FeedbackType = "form" | "quick";
+
+/** Feedback request for POST /sessions/feedback */
+export interface FeedbackRequest {
+  type: FeedbackType;
+  content: Record<string, unknown>;
+}
+
+/** Feedback response from POST /sessions/feedback */
+export interface FeedbackResponse {
+  message: string;
+  feedback_id: string;
+}
+
+/**
+ * Submits user feedback for the current session.
+ * Requires user metadata to be set.
+ * 
+ * @param type - "form" for detailed feedback, "quick" for simple reactions
+ * @param content - Structured feedback data (questions as keys, answers as values)
+ * @returns Feedback response with message and feedback_id
+ * 
+ * @example
+ * await submitFeedback("form", {
+ *   "layout_preference": "compact",
+ *   "overall_usability": 4,
+ *   "qualitative_feedback": "Great tool!"
+ * });
+ */
+export async function submitFeedback(
+  type: FeedbackType,
+  content: Record<string, unknown>
+): Promise<FeedbackResponse> {
+  const response = await fetch(`${API_BASE_URL}/sessions/feedback`, {
+    ...defaultOptions,
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify({ type, content }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to submit feedback: ${response.statusText}`);
+  }
+
+  return response.json();
 }
