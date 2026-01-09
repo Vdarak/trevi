@@ -470,28 +470,28 @@ export function PeriodicFeedbackPrompt({
 
     return (
         <div 
-            className={`fixed bottom-6 left-1/2 z-40 bg-white rounded-xl shadow-xl border border-slate-200 p-4 max-w-sm ${
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white rounded-xl shadow-xl border border-slate-200 p-3 sm:p-4 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm ${
                 isExiting ? 'animate-slide-down' : 'animate-slide-up'
             }`}
         >
-            <div className="flex items-center gap-4">
-                <div className="flex-1">
-                    <p className="text-sm text-slate-700">
-                        <span className="font-semibold">Hey!</span> If you&apos;re enjoying <span className="font-semibold">trevi</span>, please give us <span className="font-semibold">feedback</span> to help us improve!
+            <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm text-slate-700">
+                        <span className="font-semibold">Hey!</span> Enjoying <span className="font-semibold">trevi</span>? Give us <span className="font-semibold">feedback</span>!
                     </p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                     <QuickFeedback
                         context="general"
                         componentName="periodic_prompt"
                         popoverPosition="top"
-                        size="lg"
+                        size="md"
                     />
                     <button
                         onClick={handleDismiss}
-                        className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        className="p-1 sm:p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                 </div>
             </div>

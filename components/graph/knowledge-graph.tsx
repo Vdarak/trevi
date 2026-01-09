@@ -144,35 +144,14 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const prevRootNodeIdRef = useRef<string | undefined>(undefined);
 
   // Reset state when rootNodeId changes (new/different chat loaded)
-  // Collapse all nodes except root's direct children
+  // Keep nodes expanded - only reset the initial fit flag
   useEffect(() => {
     if (rootNodeId !== prevRootNodeIdRef.current) {
       hasInitialFitRef.current = false;
       prevRootNodeIdRef.current = rootNodeId;
       
-      // When loading a previous chat, collapse all nodes that have children
-      // This shows only root and its immediate children
-      if (rootNodeId && graphNodes.length > 0) {
-        // Find nodes that are direct children of root (their parent is rootNodeId or null)
-        const rootChildren = new Set(
-          graphNodes
-            .filter(n => n.parentId === rootNodeId || n.parentId === null || n.parentId === 'root')
-            .map(n => n.id)
-        );
-        
-        // Collapse all nodes that have children and are not the root
-        const nodesToCollapse = new Set<string>();
-        const nodesWithChildren = new Set(graphNodes.map(n => n.parentId).filter(Boolean) as string[]);
-        
-        graphNodes.forEach(node => {
-          // Collapse if: has children AND is a root child (we want to show root's children but collapse them)
-          if (nodesWithChildren.has(node.id) && rootChildren.has(node.id)) {
-            nodesToCollapse.add(node.id);
-          }
-        });
-        
-        setCollapsedNodes(nodesToCollapse);
-      }
+      // Clear collapsed nodes so everything is expanded when loading a chat
+      setCollapsedNodes(new Set());
     }
   }, [rootNodeId]);
 
