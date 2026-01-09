@@ -155,7 +155,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not(.light) {
+  :root {
     --background: #000000;
     --foreground: #ffffff;
 
