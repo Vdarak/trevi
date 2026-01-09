@@ -8,103 +8,17 @@ interface TreviLogoAnimationProps {
   animate?: boolean;
 }
 
+// REVERSED path - starts at bottom (21.2078, 16.8104) and ends at top-right (30.5, 9.90391)
+// This allows stroke-dashoffset to reveal from the same direction the ball moves
+const TREVI_PATH = "M21.2078 16.8104L21.2078 29.1922C21.2078 31.019 19.7268 32.5 17.8999 32.5C16.0731 32.5 14.5921 31.019 14.5921 29.1922L14.5921 8.04607C14.5921 4.43078 11.6614 1.5 8.04607 1.5L5.70195 1.5C3.38128 1.5 1.5 3.38128 1.5 5.70196C1.5 8.02263 3.38128 9.90391 5.70195 9.90391L30.5 9.90391";
+
 /**
  * Animated Trevi logo with ball following path animation.
- * The path reveals as the ball moves forward and hides as it moves back.
+ * The ball starts at the end, traces backward to reveal the path,
+ * pauses dramatically with full logo visible, then traces forward to hide.
+ * All animations use SVG native animations for perfect synchronization.
  */
 export function TreviLogoAnimation({ size = 24, className = '', animate = true }: TreviLogoAnimationProps) {
-  const revealPathRef = useRef<SVGPathElement>(null);
-  const animationRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!animate) return;
-
-    const revealPath = revealPathRef.current;
-    if (!revealPath) return;
-
-    // Get the exact path length
-    const pathLength = revealPath.getTotalLength();
-
-    // Set up the reveal path with correct dasharray
-    revealPath.style.strokeDasharray = String(pathLength);
-    revealPath.style.strokeDashoffset = String(pathLength);
-
-    // Cubic bezier function to match SVG keySplines (0.42, 0, 0.58, 1)
-    function cubicBezier(t: number, p1x: number, p1y: number, p2x: number, p2y: number): number {
-      function bezierPoint(t: number, p1: number, p2: number): number {
-        const cx = 3 * p1;
-        const bx = 3 * (p2 - p1) - cx;
-        const ax = 1 - cx - bx;
-        return ((ax * t + bx) * t + cx) * t;
-      }
-
-      function bezierDerivative(t: number, p1: number, p2: number): number {
-        const cx = 3 * p1;
-        const bx = 3 * (p2 - p1) - cx;
-        const ax = 1 - cx - bx;
-        return (3 * ax * t + 2 * bx) * t + cx;
-      }
-
-      let x = t;
-      for (let i = 0; i < 8; i++) {
-        const currentX = bezierPoint(x, p1x, p2x) - t;
-        if (Math.abs(currentX) < 0.001) break;
-        const dx = bezierDerivative(x, p1x, p2x);
-        if (Math.abs(dx) < 0.001) break;
-        x -= currentX / dx;
-      }
-      return bezierPoint(x, p1y, p2y);
-    }
-
-    const duration = 5000; // 5s total
-    let startTime: number | null = null;
-
-    function animateFrame(timestamp: number) {
-      if (!startTime) startTime = timestamp;
-      const elapsed = (timestamp - startTime) % duration;
-      const progress = elapsed / duration;
-
-      let dashOffset: number;
-
-      if (progress < 0.15) {
-        // Hidden phase (ball stationary at start)
-        dashOffset = pathLength;
-      } else if (progress < 0.45) {
-        // Reveal phase (ball moving forward: 15% -> 45%)
-        const segmentProgress = (progress - 0.15) / (0.45 - 0.15);
-        const eased = cubicBezier(segmentProgress, 0.42, 0, 0.58, 1);
-        dashOffset = pathLength * (1 - eased);
-      } else if (progress < 0.55) {
-        // DRAMATIC PAUSE at end - stroke fully revealed
-        dashOffset = 0;
-      } else if (progress < 0.85) {
-        // Hide phase (ball moving back: 55% -> 85%)
-        const segmentProgress = (progress - 0.55) / (0.85 - 0.55);
-        const eased = cubicBezier(segmentProgress, 0.42, 0, 0.58, 1);
-        dashOffset = pathLength * eased;
-      } else {
-        // Hidden phase (ball stationary at start, disappearing)
-        dashOffset = pathLength;
-      }
-
-      if (revealPath) {
-        revealPath.style.strokeDashoffset = String(dashOffset);
-      }
-      animationRef.current = requestAnimationFrame(animateFrame);
-    }
-
-    animationRef.current = requestAnimationFrame(animateFrame);
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [animate]);
-
-  // Scale factor based on original viewBox (42x42 with -4,-4 offset)
-  const scale = size / 34;
-
   return (
     <div
       className={`rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0 ${className}`}
@@ -122,21 +36,35 @@ export function TreviLogoAnimation({ size = 24, className = '', animate = true }
         <defs>
           <path
             id="treviPath"
-            d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
+            d={TREVI_PATH}
           />
         </defs>
 
-        {/* Animated reveal path */}
+        {/* Animated reveal path - pathLength="1" normalizes to match ball's 0-1 keyPoints */}
         <path
-          ref={revealPathRef}
-          d="M30.5 9.90391L5.70195 9.90391C3.38128 9.90391 1.5 8.02263 1.5 5.70196C1.5 3.38128 3.38128 1.5 5.70195 1.5L8.04607 1.5C11.6614 1.5 14.5921 4.43078 14.5921 8.04607L14.5921 29.1922C14.5921 31.019 16.0731 32.5 17.8999 32.5C19.7268 32.5 21.2078 31.019 21.2078 29.1922L21.2078 16.8104"
+          d={TREVI_PATH}
           stroke="#fff"
           strokeWidth="3"
           strokeLinecap="round"
           fill="none"
-        />
+          pathLength="1"
+          strokeDasharray="1"
+          strokeDashoffset={animate ? undefined : 0}
+        >
+          {animate && (
+            <animate
+              attributeName="stroke-dashoffset"
+              values="0.99; 0.99; 0; 0; 0.99; 0.99"
+              keyTimes="0; 0.15; 0.45; 0.55; 0.85; 1"
+              dur="5s"
+              repeatCount="indefinite"
+              calcMode="spline"
+              keySplines="0 0 1 1; 0.42 0 0.58 1; 0 0 1 1; 0.42 0 0.58 1; 0 0 1 1"
+            />
+          )}
+        </path>
 
-        {/* Main Ball with motion and scale animation - solid white fill */}
+        {/* Main Ball - starts at path start (bottom), moves to path end (top-right), returns */}
         {animate && (
           <circle r="0" fill="#fff">
             <animateMotion

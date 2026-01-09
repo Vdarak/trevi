@@ -122,8 +122,9 @@ export function ChatSidebar({
     // Title based on active tab
     const currentTitle = activeTab === 'thread' && activeLabel ? activeLabel : rootLabel;
 
-    // Auto-scroll to active node or top
+    // Auto-scroll to active node or top (but NOT when streaming - let bottom scroll take over)
     useEffect(() => {
+        if (isStreaming) return; // Don't interfere with streaming scroll
         const timeoutId = setTimeout(() => {
             if (activeNodeId && nodeRefs.current.has(activeNodeId)) {
                 nodeRefs.current.get(activeNodeId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -132,7 +133,20 @@ export function ChatSidebar({
             }
         }, 150);
         return () => clearTimeout(timeoutId);
-    }, [activeNodeId, activeTab]);
+    }, [activeNodeId, activeTab, isStreaming]);
+
+    // Scroll to bottom when streaming/exploring starts (with longer delay for sidebar animation)
+    useEffect(() => {
+        if (isStreaming && isOpen) {
+            const timeoutId = setTimeout(() => {
+                messagesContainerRef.current?.scrollTo({
+                    top: messagesContainerRef.current?.scrollHeight || 0,
+                    behavior: 'smooth'
+                });
+            }, 350); // Longer delay to wait for sidebar animation
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isStreaming, isOpen]);
 
     const fetchBibliography = useCallback(() => {
         if (!chatId) return;

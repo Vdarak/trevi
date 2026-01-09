@@ -7,6 +7,7 @@ import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { KnowledgeGraph, GraphNode, buildGraphFromResponses } from '@/components/graph/knowledge-graph';
 import { TreviLogoAnimation, TreviLogoStatic } from '@/components/ui/trevi-logo';
+import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   editChatResponse,
@@ -151,6 +152,8 @@ export default function Home() {
           setProcessingQuery(null);
           setIsLoading(false);
           setIsCreatingChat(false);
+          // Auto-open sidebar when new chat is created
+          setIsChatSidebarOpen(true);
 
           // Remove pending chat now that real chat exists
           setPendingChats([]);
@@ -288,6 +291,8 @@ export default function Home() {
 
   // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
+    // Close chat sidebar when selecting a different chat
+    setIsChatSidebarOpen(false);
     setIsLoading(true);
     setStatusMessage("Loading conversation...");
     setCurrentChatId(chatId);
@@ -352,6 +357,8 @@ export default function Home() {
     // Start tracking this connection
     const abortController = connectionManagerRef.current.start(nodeId, nodeLabel);
     setIsStreaming(true);
+    // Auto-open sidebar when exploring a direction
+    setIsChatSidebarOpen(true);
 
     try {
       const request = createDirectedQueryRequest(currentChatId, nodeId);
@@ -419,6 +426,8 @@ export default function Home() {
   // Handle clicking a node in the graph (panel is handled internally by KnowledgeGraph)
   const handleNodeClick = useCallback((nodeId: string) => {
     setCurrentNodeId(nodeId);
+    // Auto-open sidebar when clicking on a node
+    setIsChatSidebarOpen(true);
   }, []);
 
   // State for node conversation panel streaming
@@ -550,16 +559,7 @@ export default function Home() {
         {/* Graph/Content Area */}
         <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
-            <div className="flex flex-col items-center justify-center h-full w-full bg-white">
-              {/* Responsive logo sizing */}
-              <div className="md:hidden" style={{ width: 'min(40dvw, 150px)', height: 'min(40dvw, 150px)' }}>
-                <TreviLogoAnimation size={150} />
-              </div>
-              <div className="hidden md:block">
-                <TreviLogoAnimation size={200} />
-              </div>
-              <p className="mt-8 text-lg md:text-xl font-medium text-slate-700 text-center px-4">Creating your knowledge space...</p>
-            </div>
+            <GraphLoading />
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab
             <div className={`h-full ${mobileActiveTab === 'chat' ? 'hidden md:block' : ''}`}>

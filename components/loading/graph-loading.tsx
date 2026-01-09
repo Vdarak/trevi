@@ -5,22 +5,29 @@ import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 
 const loadingMessages = [
   "Trevi is thinking...",
-  "Creating your graph...",
+  "Creating your topic tree...",
   "Organizing knowledge...",
   "Connecting ideas...",
   "Building connections...",
+  "Almost there...",
+  "Creating your topic tree...", // Final message
 ];
+
+// Cycle interval: ~60 seconds / 7 messages ≈ 8.5 seconds per message
+const MESSAGE_INTERVAL = 8500;
 
 export function GraphLoading() {
   const [messageIndex, setMessageIndex] = useState(0);
 
-  // Cycle through messages
+  // Cycle through messages, stopping at the last one
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % loadingMessages.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
+    if (messageIndex >= loadingMessages.length - 1) return; // Stop at final message
+    
+    const timeout = setTimeout(() => {
+      setMessageIndex((prev) => Math.min(prev + 1, loadingMessages.length - 1));
+    }, MESSAGE_INTERVAL);
+    return () => clearTimeout(timeout);
+  }, [messageIndex]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full bg-white">
