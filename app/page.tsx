@@ -499,13 +499,13 @@ export default function Home() {
   const showGraphPage = !!currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden">
+    <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Mobile Hamburger Button - floating button to open sidebar (hidden when sidebar is open) */}
       {!isMobileSidebarOpen && (
         <div className="fixed top-4 left-4 z-40 md:hidden">
           <button
             onClick={() => setIsMobileSidebarOpen(true)}
-            className="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+            className="w-12 h-12 flex items-center justify-center bg-card rounded-lg shadow-md border border-border text-foreground hover:bg-muted transition-colors"
           >
             <Menu className="w-6 h-6" />
           </button>
@@ -536,10 +536,10 @@ export default function Home() {
       <main className="flex-1 flex flex-col md:flex-row h-full relative overflow-hidden">
         {/* Mobile Tab Bar - bottom navigation */}
         {showGraphPage && (
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border flex md:hidden">
             <button
               onClick={() => setMobileActiveTab('graph')}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'graph' ? 'text-primary' : 'text-muted-foreground'
                 }`}
             >
               <MapIcon className="w-5 h-5" />
@@ -547,7 +547,7 @@ export default function Home() {
             </button>
             <button
               onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
+              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-primary' : 'text-muted-foreground'
                 }`}
             >
               <MessageSquare className="w-5 h-5" />

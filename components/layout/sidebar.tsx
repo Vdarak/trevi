@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Trash2, Plus, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, getUserMetadata, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
@@ -128,7 +129,7 @@ export function Sidebar({
       <div
         className={cn(
           // Base styles
-          "bg-slate-50/95 backdrop-blur-sm h-screen flex flex-col border-r border-slate-200",
+          "bg-card/95 backdrop-blur-sm h-screen flex flex-col border-r border-border",
           // Desktop: always visible, fixed width
           "hidden md:flex md:w-64 md:relative md:flex-shrink-0",
           // Mobile: slide-in drawer
@@ -143,7 +144,7 @@ export function Sidebar({
             e.stopPropagation();
             onMobileClose?.();
           }}
-          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 md:hidden z-10"
+          className="absolute top-4 right-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted md:hidden z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -154,20 +155,21 @@ export function Sidebar({
           onClick={() => { onLogoClick?.(); onMobileClose?.(); }}
         >
           <TreviLogoStatic size={32} />
-          <span className="text-xl font-bold tracking-tight text-slate-900">trevi</span>
+          <span className="text-xl font-bold tracking-tight text-foreground">trevi</span>
         </div>
 
-        <div className="px-6 mb-4">
-          <p className="text-sm text-slate-500 mb-4">
-            explore your <span className="text-blue-500 font-semibold">curiosity.</span>
+        <div className="px-6 mb-4 flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            explore your <span className="text-primary font-semibold">curiosity.</span>
           </p>
+          <ThemeToggle />
         </div>
 
         {/* New Chat Button */}
         <div className="px-4 mb-2">
           <Button
             onClick={handleNewChatMobile}
-            className="w-full justify-start gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+            className="w-full justify-start gap-2"
           >
             <Plus className="w-4 h-4" />
             New Topic
@@ -176,7 +178,7 @@ export function Sidebar({
 
         <div className="space-y-4 py-4 flex-1 overflow-y-auto">
           <div className="px-3 py-2">
-            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight flex items-center gap-2 text-slate-800">
+            <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight flex items-center gap-2 text-foreground">
               Topic Trees
             </h2>
             <div className="space-y-1">
@@ -188,21 +190,21 @@ export function Sidebar({
                 >
                   <Button
                     variant="ghost"
-                    className="w-full justify-between font-normal h-auto py-2.5 px-3 text-left bg-slate-50 border border-slate-200 hover:bg-slate-100"
+                    className="w-full justify-between font-normal h-auto py-2.5 px-3 text-left bg-muted border border-border hover:bg-muted/80"
                     disabled={pending.isLoading}
                   >
-                    <span className="text-sm text-slate-600 truncate">
+                    <span className="text-sm text-muted-foreground truncate">
                       {pending.name || 'Creating Topic Tree...'}
                     </span>
-                    <TreviSpinner size={16} className="text-slate-400 flex-shrink-0" />
+                    <TreviSpinner size={16} className="text-muted-foreground flex-shrink-0" />
                   </Button>
                 </div>
               ))}
 
               {loading ? (
-                <p className="px-4 text-sm text-slate-400">Loading...</p>
+                <p className="px-4 text-sm text-muted-foreground">Loading...</p>
               ) : chats.length === 0 && pendingChats.length === 0 ? (
-                <p className="px-4 text-sm text-slate-400">No Topic Trees yet</p>
+                <p className="px-4 text-sm text-muted-foreground">No Topic Trees yet</p>
               ) : (
                 chats.map((chat) => (
                   <div
@@ -215,15 +217,15 @@ export function Sidebar({
                       variant={selectedChatId === chat.chat_id ? "secondary" : "ghost"}
                       className={cn(
                         "w-full justify-start font-normal h-auto py-2 text-left pr-10",
-                        selectedChatId === chat.chat_id && "bg-slate-200"
+                        selectedChatId === chat.chat_id && "bg-secondary"
                       )}
                       onClick={() => handleChatSelectMobile(chat.chat_id)}
                     >
                       <div className="flex flex-col items-start w-full">
-                        <span className="text-sm text-slate-700 truncate w-full">
+                        <span className="text-sm text-foreground truncate w-full">
                           {chat.chat_name}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-muted-foreground">
                           {formatRelativeTime(chat.created_at)}
                         </span>
                       </div>
@@ -234,7 +236,7 @@ export function Sidebar({
                       <button
                         onClick={(e) => handleDeleteChat(chat.chat_id, e)}
                         disabled={deletingChatId === chat.chat_id}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                         title="Delete chat"
                       >
                         <Trash2 className="w-4 h-4" />

@@ -3,40 +3,101 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Light mode - Design system with white, blue, and black */
   --background: #ffffff;
-  --foreground: #0f172a;
+  --foreground: #000000;
 
   --card: #ffffff;
-  --card-foreground: #0f172a;
+  --card-foreground: #000000;
 
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --popover-foreground: #000000;
 
-  --primary: #0f172a;
-  --primary-foreground: #f8fafc;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
 
   --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
+  --secondary-foreground: #000000;
 
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
 
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
+  --accent: #dbeafe;
+  --accent-foreground: #1e3a8a;
 
-  --destructive: #ef4444;
-  --destructive-foreground: #f8fafc;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
 
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #0f172a;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #2563eb;
 
   --radius: 0.5rem;
 
-  /* Trevi Custom Colors */
-  --trevi-deep: #0B1120;
-  --trevi-light: #E0F7FA;
-  --trevi-yellow: #FCD34D;
+  /* Design system colors */
+  --blue-primary: #2563eb;
+  --blue-light: #60a5fa;
+  --blue-dark: #1e40af;
+  --blue-lightest: #dbeafe;
+  
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+}
+
+/* Dark mode colors */
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+
+  --card: #1f2937;
+  --card-foreground: #ffffff;
+
+  --popover: #1f2937;
+  --popover-foreground: #ffffff;
+
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+
+  --secondary: #374151;
+  --secondary-foreground: #ffffff;
+
+  --muted: #374151;
+  --muted-foreground: #9ca3af;
+
+  --accent: #1e3a8a;
+  --accent-foreground: #dbeafe;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #374151;
+  --input: #374151;
+  --ring: #3b82f6;
+
+  /* Design system colors for dark mode */
+  --blue-primary: #3b82f6;
+  --blue-light: #60a5fa;
+  --blue-dark: #1d4ed8;
+  --blue-lightest: #1e3a8a;
+  
+  --gray-50: #1f2937;
+  --gray-100: #374151;
+  --gray-200: #4b5563;
+  --gray-300: #6b7280;
+  --gray-400: #9ca3af;
+  --gray-500: #d1d5db;
+  --gray-600: #e5e7eb;
+  --gray-700: #f3f4f6;
+  --gray-800: #f9fafb;
+  --gray-900: #ffffff;
 }
 
 @theme inline {
@@ -72,43 +133,73 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 
-  --color-trevi-deep: var(--trevi-deep);
-  --color-trevi-light: var(--trevi-light);
-  --color-trevi-yellow: var(--trevi-yellow);
+  /* Design system colors */
+  --color-blue-primary: var(--blue-primary);
+  --color-blue-light: var(--blue-light);
+  --color-blue-dark: var(--blue-dark);
+  --color-blue-lightest: var(--blue-lightest);
+
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0B1120;
-    --foreground: #f8fafc;
+  :root:not(.light) {
+    --background: #000000;
+    --foreground: #ffffff;
 
-    --card: #1e293b;
-    --card-foreground: #f8fafc;
+    --card: #1f2937;
+    --card-foreground: #ffffff;
 
-    --popover: #0f172a;
-    --popover-foreground: #f8fafc;
+    --popover: #1f2937;
+    --popover-foreground: #ffffff;
 
-    --primary: #f8fafc;
-    --primary-foreground: #0f172a;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
 
-    --secondary: #1e293b;
-    --secondary-foreground: #f8fafc;
+    --secondary: #374151;
+    --secondary-foreground: #ffffff;
 
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
+    --muted: #374151;
+    --muted-foreground: #9ca3af;
 
-    --accent: #1e293b;
-    --accent-foreground: #f8fafc;
+    --accent: #1e3a8a;
+    --accent-foreground: #dbeafe;
 
-    --destructive: #7f1d1d;
-    --destructive-foreground: #f8fafc;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
 
-    --border: #1e293b;
-    --input: #1e293b;
-    --ring: #cbd5e1;
+    --border: #374151;
+    --input: #374151;
+    --ring: #3b82f6;
+
+    /* Design system colors for dark mode */
+    --blue-primary: #3b82f6;
+    --blue-light: #60a5fa;
+    --blue-dark: #1d4ed8;
+    --blue-lightest: #1e3a8a;
+    
+    --gray-50: #1f2937;
+    --gray-100: #374151;
+    --gray-200: #4b5563;
+    --gray-300: #6b7280;
+    --gray-400: #9ca3af;
+    --gray-500: #d1d5db;
+    --gray-600: #e5e7eb;
+    --gray-700: #f3f4f6;
+    --gray-800: #f9fafb;
+    --gray-900: #ffffff;
   }
 }
 
@@ -116,6 +207,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Hide scrollbar tracks globally */
