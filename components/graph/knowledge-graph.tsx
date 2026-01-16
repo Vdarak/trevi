@@ -73,6 +73,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [isStatusPillExpanded, setIsStatusPillExpanded] = useState(false); // Toggle for status pill dropdown
   const [statusPillWarning, setStatusPillWarning] = useState<string | undefined>(undefined); // Temporary warning message for status pill
 
+  // Delete confirmation modal state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    nodeId: string;
+    nodeLabel: string;
+  } | null>(null);
+
   // Periodic feedback prompt state
   const [showPeriodicFeedback, setShowPeriodicFeedback] = useState(false);
   const periodicFeedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -86,19 +93,19 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
       if (periodicFeedbackTimerRef.current) {
         clearTimeout(periodicFeedbackTimerRef.current);
       }
-      
+
       // Check if 5 minutes have passed since last dismiss
       const timeSinceLastDismiss = Date.now() - lastFeedbackDismissRef.current;
       const fiveMinutes = 5 * 60 * 1000;
-      
+
       // Set timer for 5 minutes (or remaining time if recently dismissed)
       const timeToWait = Math.max(fiveMinutes - timeSinceLastDismiss, fiveMinutes);
-      
+
       periodicFeedbackTimerRef.current = setTimeout(() => {
         setShowPeriodicFeedback(true);
       }, timeToWait);
     }
-    
+
     return () => {
       if (periodicFeedbackTimerRef.current) {
         clearTimeout(periodicFeedbackTimerRef.current);
@@ -149,7 +156,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     if (rootNodeId !== prevRootNodeIdRef.current) {
       hasInitialFitRef.current = false;
       prevRootNodeIdRef.current = rootNodeId;
-      
+
       // Clear collapsed nodes so everything is expanded when loading a chat
       setCollapsedNodes(new Set());
     }
@@ -285,7 +292,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         const nodeIsLoading = loadingNodeIds instanceof Set
           ? loadingNodeIds.has(node.id)
           : (loadingNodeIds || []).includes(node.id);
-        
+
         // Cannot delete if:
         // 1. The target node is being loaded
         // 2. Any node in the graph is being explored (globalStatus)
@@ -301,7 +308,10 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           data: {
             canDelete,
             direction,
-            onDelete: () => onDeleteNode?.(node.id),
+            onRequestDelete: () => {
+              const nodeLabel = graphNodes.find(n => n.id === node.id)?.label || 'this branch';
+              setDeleteConfirmation({ isOpen: true, nodeId: node.id, nodeLabel });
+            },
           } as DeletableEdgeData,
         };
       });
@@ -1008,6 +1018,48 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           statusMessage={nodeStatusMessage}
           clickPosition={modalData.clickPosition}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation?.isOpen && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            className="bg-white rounded-xl shadow-2xl border border-slate-200 p-5 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Delete branch?</h3>
+                <p className="text-sm text-slate-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-5">
+              This will permanently delete <span className="font-medium text-slate-900">"{deleteConfirmation.nodeLabel}"</span> and all of its children.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmation(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDeleteNode?.(deleteConfirmation.nodeId);
+                  setDeleteConfirmation(null);
+                }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

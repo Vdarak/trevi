@@ -67,7 +67,7 @@ export function QuickFeedback({
     const [mounted, setMounted] = useState(false);
     const [position, setPosition] = useState<{ x: number; y: number; ready: boolean } | null>(null);
     const [hoveredThumb, setHoveredThumb] = useState<"up" | "down" | null>(null);
-    
+
     const containerRef = useRef<HTMLDivElement>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,9 +90,9 @@ export function QuickFeedback({
             clearTimeout(leaveTimeoutRef.current);
             leaveTimeoutRef.current = null;
         }
-        
+
         setHoveredThumb(type);
-        
+
         // Debounce: only show popover after 200ms hover
         hoverTimeoutRef.current = setTimeout(() => {
             setSelectedPreset(null);
@@ -111,9 +111,9 @@ export function QuickFeedback({
             clearTimeout(hoverTimeoutRef.current);
             hoverTimeoutRef.current = null;
         }
-        
+
         setHoveredThumb(null);
-        
+
         // Debounce close: give user time to move to popover
         leaveTimeoutRef.current = setTimeout(() => {
             // Only close if not hovering popover
@@ -218,7 +218,7 @@ export function QuickFeedback({
             setIsOtherMode(true);
             return;
         }
-        
+
         setSelectedPreset(preset);
         await submitFeedbackToAPI(preset);
     };
@@ -238,7 +238,7 @@ export function QuickFeedback({
                 context,
                 ...(nodeId && { node_id: nodeId }),
             });
-            
+
             setShowSuccess(true);
             setTimeout(() => {
                 setShowSuccess(false);
@@ -262,7 +262,7 @@ export function QuickFeedback({
         }
     };
 
-    const presets = feedbackType 
+    const presets = feedbackType
         ? PRESETS[feedbackType === "up" ? "liked" : "disliked"][context]
         : [];
 
@@ -278,8 +278,8 @@ export function QuickFeedback({
                 className={`
                     ${buttonSize} rounded-md transition-all duration-150
                     ${feedbackType === "up" || hoveredThumb === "up"
-                        ? "text-green-600 bg-green-50" 
-                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}
+                        ? "text-green-600 bg-green-50"
+                        : "text-green-500 hover:text-green-600 hover:bg-green-50"}
                 `}
                 title="Like"
             >
@@ -293,8 +293,8 @@ export function QuickFeedback({
                 className={`
                     ${buttonSize} rounded-md transition-all duration-150
                     ${feedbackType === "down" || hoveredThumb === "down"
-                        ? "text-red-500 bg-red-50" 
-                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}
+                        ? "text-red-600 bg-red-50"
+                        : "text-red-400 hover:text-red-500 hover:bg-red-50"}
                 `}
                 title="Dislike"
             >
@@ -307,8 +307,8 @@ export function QuickFeedback({
                     onClick={handleCopy}
                     className={`
                         ${buttonSize} rounded-md transition-all duration-150
-                        ${copied 
-                            ? "text-green-600 bg-green-50" 
+                        ${copied
+                            ? "text-green-600 bg-green-50"
                             : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"}
                     `}
                     title={copied ? "Copied!" : "Copy"}
@@ -319,7 +319,7 @@ export function QuickFeedback({
 
             {/* Feedback Popover - Rendered via Portal */}
             {mounted && showPopover && feedbackType && createPortal(
-                <div 
+                <div
                     ref={popoverRef}
                     onMouseEnter={handlePopoverMouseEnter}
                     onMouseLeave={handlePopoverMouseLeave}
@@ -340,9 +340,9 @@ export function QuickFeedback({
                                     <>&nbsp;</>
                                 ) : (
                                     <>
-                                        {feedbackType === "up" 
-                                            ? "What did you like?" 
-                                            : "What could be better?"} 
+                                        {feedbackType === "up"
+                                            ? "What did you like?"
+                                            : "What could be better?"}
                                         <span className="text-slate-400 ml-1">(optional)</span>
                                     </>
                                 )}
@@ -469,10 +469,9 @@ export function PeriodicFeedbackPrompt({
     }, [handleDismiss]);
 
     return (
-        <div 
-            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white rounded-xl shadow-xl border border-slate-200 p-3 sm:p-4 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm ${
-                isExiting ? 'animate-slide-down' : 'animate-slide-up'
-            }`}
+        <div
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white rounded-xl shadow-xl border border-slate-200 p-3 sm:p-4 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm ${isExiting ? 'animate-slide-down' : 'animate-slide-up'
+                }`}
         >
             <div className="flex items-center gap-2 sm:gap-4">
                 <div className="flex-1 min-w-0">

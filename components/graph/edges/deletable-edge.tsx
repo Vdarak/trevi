@@ -11,6 +11,7 @@ import { X } from 'lucide-react';
 
 export interface DeletableEdgeData extends Record<string, unknown> {
     onDelete?: () => void;
+    onRequestDelete?: () => void; // New: request delete confirmation from parent
     canDelete?: boolean;
     direction?: 'TB' | 'LR';
     isNodeHovered?: boolean; // True when the target node is being hovered
@@ -24,6 +25,7 @@ export interface DeletableEdgeData extends Record<string, unknown> {
  * - Button appears when hovering over the target node
  * - Button appears on active/highlighted edges when hovered
  * - Deletion is disabled when canDelete is false (e.g., during exploration)
+ * - Clicking delete triggers onRequestDelete which shows confirmation in parent
  */
 export function DeletableEdge({
     id,
@@ -52,19 +54,19 @@ export function DeletableEdge({
 
     const edgeData = data as DeletableEdgeData | undefined;
     const canDelete = edgeData?.canDelete ?? true;
-    const onDelete = edgeData?.onDelete;
+    const onRequestDelete = edgeData?.onRequestDelete;
     const isNodeHovered = edgeData?.isNodeHovered ?? false;
 
     // Show button if either edge is hovered or target node is hovered
     const showButton = isEdgeHovered || isNodeHovered;
 
-    const handleDelete = useCallback((e: React.MouseEvent) => {
+    const handleDeleteClick = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        if (canDelete && onDelete) {
-            onDelete();
+        if (canDelete && onRequestDelete) {
+            onRequestDelete();
         }
-    }, [canDelete, onDelete]);
+    }, [canDelete, onRequestDelete]);
 
     // Use debounced hover to prevent flickering
     const handleMouseEnter = useCallback(() => {
@@ -117,8 +119,9 @@ export function DeletableEdge({
                     onMouseEnter={handleMouseEnter}
                     onMouseLeave={handleMouseLeave}
                 >
+                    {/* Delete button */}
                     <button
-                        onClick={handleDelete}
+                        onClick={handleDeleteClick}
                         disabled={!canDelete}
                         className={`
                             flex items-center justify-center
