@@ -5,6 +5,7 @@ import { Mic, Send, Loader2, Atom, ScrollText, Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useVoiceDictation } from '@/hooks/use-voice-dictation';
+import GradientText from '@/components/ui/gradient-text';
 
 interface ChatInterfaceProps {
   onSendMessage: (message: string) => void;
@@ -205,7 +206,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       {/* Hero Text - Responsive sizing */}
       <div className="text-center mb-4 sm:mb-6 md:mb-8 mt-4 lg:mb-10 flex-shrink-0">
         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight mb-2 sm:mb-3 md:mb-4 text-slate-900">
-          What are you curious about?
+          What are you <GradientText colors={["#023fe7ff", "#2563eb", "#3b82f6", "#2563eb", "#023fe7ff"]} animationSpeed={4} className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold">curious</GradientText> about?
         </h1>
         <p className="text-slate-500 text-sm sm:text-base md:text-lg lg:text-xl px-2">
           Research and explore <span className="font-bold text-slate-700">your</span> curiosity to the deepest levels
@@ -236,7 +237,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
           <textarea
             ref={inputRef}
             placeholder=""
-            className="w-full min-h-[100px] md:min-h-[100px] lg:min-h-[120px] max-h-[150px] sm:max-h-[200px] px-4 sm:px-5 py-3.5 sm:py-4 md:py-5 pr-24 sm:pr-36 md:pr-40 text-base md:text-lg text-slate-900 bg-transparent resize-none focus:outline-none"
+            className="w-full min-h-[80px] md:min-h-[100px] lg:min-h-[120px] max-h-[150px] sm:max-h-[200px] px-4 sm:px-5 py-3.5 sm:py-4 md:py-5 pr-24 sm:pr-36 md:pr-40 text-base md:text-lg text-slate-900 bg-transparent resize-none focus:outline-none"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}

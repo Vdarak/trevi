@@ -200,7 +200,7 @@ export function ChatSidebar({
                 className={`
                     fixed inset-0 z-50 h-[100dvh]
                     md:relative md:inset-auto md:z-auto md:h-auto
-                    bg-white flex flex-col overflow-hidden
+                    bg-white flex flex-col
                     w-full md:min-w-[400px] md:max-w-[50vw]
                     md:border-l md:border-slate-200
                     transition-transform duration-300 ease-out
@@ -223,7 +223,7 @@ export function ChatSidebar({
                     <div className={`
                         absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
                         flex items-center justify-center
-                        w-5 h-10 rounded-full
+                        w-4 h-8 rounded-full
                         bg-white border border-slate-200 shadow-sm
                         text-slate-400 group-hover:text-blue-500 group-hover:border-blue-300
                         transition-colors

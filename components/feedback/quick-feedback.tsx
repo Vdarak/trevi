@@ -471,36 +471,41 @@ export function PeriodicFeedbackPrompt({
     return (
         <div
             className={`
-                fixed z-40 
-                left-1/2 -translate-x-1/2
-                bottom-4 sm:bottom-6
-                w-[calc(100%-1.5rem)] sm:w-auto sm:max-w-sm
-                mx-auto
-                bg-white rounded-xl shadow-xl border border-slate-200 
-                p-3 sm:p-4
-                pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4
+                fixed z-[9999] 
+                bottom-24 md:bottom-8
+                inset-x-0
+                flex justify-center
+                pointer-events-none
                 ${isExiting ? 'animate-slide-down' : 'animate-slide-up'}
             `}
         >
-            <div className="flex items-center gap-2 sm:gap-4">
-                <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm text-slate-700">
+            <div
+                className={`
+                    mx-4 md:mx-0
+                    w-full md:w-auto md:max-w-md
+                    bg-white rounded-xl shadow-xl border border-slate-200 
+                    p-4
+                    pointer-events-auto
+                `}
+            >
+                <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-slate-700 flex-1">
                         <span className="font-semibold">Hey!</span> Enjoying <span className="font-semibold">trevi</span>? Give us <span className="font-semibold">feedback</span>!
                     </p>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                    <QuickFeedback
-                        context="general"
-                        componentName="periodic_prompt"
-                        popoverPosition="top"
-                        size="md"
-                    />
-                    <button
-                        onClick={handleDismiss}
-                        className="p-1 sm:p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                    >
-                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <QuickFeedback
+                            context="general"
+                            componentName="periodic_prompt"
+                            popoverPosition="top"
+                            size="lg"
+                        />
+                        <button
+                            onClick={handleDismiss}
+                            className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

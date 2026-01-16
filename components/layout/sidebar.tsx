@@ -8,6 +8,7 @@ import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
 import { getChats, deleteChat, formatRelativeTime, getUserMetadata, type Chat } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
+import GradientText from '@/components/ui/gradient-text';
 
 interface PendingChat {
   id: string;
@@ -159,7 +160,7 @@ export function Sidebar({
 
         <div className="px-6 mb-4">
           <p className="text-sm text-slate-500 mb-4">
-            explore your <span className="text-blue-500 font-semibold">curiosity.</span>
+            explore your <GradientText colors={["#023fe7ff", "#2563eb", "#3b82f6", "#2563eb", "#023fe7ff"]} animationSpeed={4} className="text-sm font-semibold">curiosity.</GradientText>
           </p>
         </div>
 

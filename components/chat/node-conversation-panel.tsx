@@ -86,13 +86,13 @@ export function NodeConversationPanel({
                         context="component"
                         componentName="node_panel"
                         popoverPosition="bottom"
-                        size="sm"
+                        size="md"
                     />
                     <button
                         onClick={onClose}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                     >
-                        <X className="w-4 h-4" />
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
             </div>
@@ -248,13 +248,13 @@ export function NodeConversationModal({
                             context="component"
                             componentName="node_modal"
                             popoverPosition="bottom"
-                            size="sm"
+                            size="lg"
                         />
                         <button
                             onClick={onClose}
                             className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-6 h-6" />
                         </button>
                     </div>
                 </div>
