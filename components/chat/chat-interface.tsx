@@ -236,7 +236,7 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
           <textarea
             ref={inputRef}
             placeholder=""
-            className="w-full min-h-[72px] md:min-h-[100px] lg:min-h-[120px] max-h-[150px] sm:max-h-[200px] px-4 sm:px-5 py-3.5 sm:py-4 md:py-5 pr-24 sm:pr-36 md:pr-40 text-base md:text-lg text-slate-900 bg-transparent resize-none focus:outline-none"
+            className="w-full min-h-[100px] md:min-h-[100px] lg:min-h-[120px] max-h-[150px] sm:max-h-[200px] px-4 sm:px-5 py-3.5 sm:py-4 md:py-5 pr-24 sm:pr-36 md:pr-40 text-base md:text-lg text-slate-900 bg-transparent resize-none focus:outline-none"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
