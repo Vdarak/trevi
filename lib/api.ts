@@ -679,9 +679,16 @@ export async function getBibliography(chatId: string): Promise<BibliographyRespo
  * formatRelativeTime("2025-12-26T15:39:37.416638") // "5 mins ago"
  */
 export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  // Backend returns UTC timestamps without 'Z' suffix, so we append it
+  // to ensure JavaScript parses it as UTC rather than local time
+  const normalizedDateString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+  const date = new Date(normalizedDateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+
+  // Handle future timestamps (negative diff) - show as "Just now"
+  if (diffMs < 0) return "Just now";
+
   const diffSecs = Math.floor(diffMs / 1000);
   const diffMins = Math.floor(diffSecs / 60);
   const diffHours = Math.floor(diffMins / 60);

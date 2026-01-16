@@ -470,8 +470,17 @@ export function PeriodicFeedbackPrompt({
 
     return (
         <div
-            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white rounded-xl shadow-xl border border-slate-200 p-3 sm:p-4 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm ${isExiting ? 'animate-slide-down' : 'animate-slide-up'
-                }`}
+            className={`
+                fixed z-40 
+                left-1/2 -translate-x-1/2
+                bottom-4 sm:bottom-6
+                w-[calc(100%-1.5rem)] sm:w-auto sm:max-w-sm
+                mx-auto
+                bg-white rounded-xl shadow-xl border border-slate-200 
+                p-3 sm:p-4
+                pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4
+                ${isExiting ? 'animate-slide-down' : 'animate-slide-up'}
+            `}
         >
             <div className="flex items-center gap-2 sm:gap-4">
                 <div className="flex-1 min-w-0">

@@ -75,7 +75,7 @@ export function MessageBubble({ role, content, isStreaming, citations, onEdit, n
                                     e.target.style.height = `${e.target.scrollHeight}px`;
                                 }}
                                 onKeyDown={handleKeyDown}
-                                className="w-full bg-transparent text-white text-sm resize-none focus:outline-none placeholder:text-slate-400"
+                                className="w-full bg-transparent text-white text-base resize-none focus:outline-none placeholder:text-slate-400"
                                 rows={1}
                             />
                             <div className="flex justify-end gap-2 mt-2">

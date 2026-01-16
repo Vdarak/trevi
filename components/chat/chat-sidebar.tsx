@@ -198,9 +198,9 @@ export function ChatSidebar({
                 ref={sidebarRef}
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? width : undefined }}
                 className={`
-                    fixed inset-0 z-50 
-                    md:relative md:inset-auto md:z-auto
-                    bg-white flex flex-col 
+                    fixed inset-0 z-50 h-[100dvh]
+                    md:relative md:inset-auto md:z-auto md:h-auto
+                    bg-white flex flex-col overflow-hidden
                     w-full md:min-w-[400px] md:max-w-[50vw]
                     md:border-l md:border-slate-200
                     transition-transform duration-300 ease-out
@@ -234,10 +234,10 @@ export function ChatSidebar({
                 </div>
 
                 {/* Header */}
-                <header className="flex-shrink-0 bg-white border-b border-slate-200 safe-area-top">
+                <header className="flex-shrink-0 bg-white border-b border-slate-200 pt-[env(safe-area-inset-top)]">
                     {/* Tab Bar */}
-                    <div className="flex items-center h-14 px-1">
-                        <div className="flex-1 flex">
+                    <div className="flex items-center h-12 sm:h-14 px-1">
+                        <div className="flex-1 flex min-w-0 overflow-hidden">
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;
                                 const isActive = activeTab === tab.id;
@@ -251,13 +251,13 @@ export function ChatSidebar({
                                             setActiveTab(tab.id);
                                         }}
                                         className={`
-                                            relative flex items-center gap-1.5 px-4 py-3
-                                            text-sm font-medium transition-colors
+                                            relative flex items-center justify-center gap-1.5 px-3 py-3
+                                            text-sm font-medium transition-colors whitespace-nowrap
                                             ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}
                                         `}
                                     >
-                                        <Icon className="w-4 h-4" />
-                                        <span>{tab.label}</span>
+                                        <Icon className="w-6 h-6" />
+                                        {isActive && <span>{tab.label}</span>}
                                         {isActive && (
                                             <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
                                         )}
@@ -265,18 +265,18 @@ export function ChatSidebar({
                                 );
                             })}
                         </div>
-                        <div className="flex items-center gap-1 mr-1">
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-1">
                             <QuickFeedback
                                 context="component"
                                 componentName="chat_sidebar"
                                 popoverPosition="bottom"
-                                size="md"
+                                size="lg"
                             />
                             <button
                                 onClick={onClose}
                                 className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-6 h-6" />
                             </button>
                         </div>
                     </div>
@@ -484,7 +484,7 @@ export function ChatSidebar({
                 </main>
 
                 {/* Input Footer */}
-                <footer className="flex-shrink-0 bg-white border-t border-slate-200 safe-area-bottom">
+                <footer className="flex-shrink-0 bg-white border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
                     <form onSubmit={handleSubmit} className="p-3">
                         <div className="flex items-center gap-2">
                             <input
@@ -497,7 +497,7 @@ export function ChatSidebar({
                                 className="
                                     flex-1 px-4 py-3 
                                     rounded-xl border border-slate-200 
-                                    bg-slate-50 text-sm text-slate-800 
+                                    bg-slate-50 text-base text-slate-800 
                                     placeholder:text-slate-400 
                                     focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 
                                     disabled:opacity-50 disabled:cursor-not-allowed 

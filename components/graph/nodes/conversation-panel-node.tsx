@@ -101,7 +101,7 @@ export function ConversationPanelNode({ data }: { data: ConversationPanelNodeDat
                             onMouseDown={(e) => e.stopPropagation()}
                             placeholder="Ask a follow-up..."
                             disabled={data.isStreaming}
-                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         />
                         <button
                             type="submit"

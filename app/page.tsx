@@ -499,7 +499,7 @@ export default function Home() {
   const showGraphPage = !!currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden">
+    <div className="flex h-dvh w-full bg-white overflow-hidden">
       {/* Mobile Hamburger Button - floating button to open sidebar (hidden when sidebar is open) */}
       {!isMobileSidebarOpen && (
         <div className="fixed top-4 left-4 z-40 md:hidden">
@@ -514,8 +514,9 @@ export default function Home() {
 
       {/* Mobile Home Header - centered Trevi logo (only on landing page) */}
       {showLandingPage && !isMobileSidebarOpen && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 md:hidden">
-          <TreviLogoStatic size={32} />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center gap-2">
+          <TreviLogoStatic size={40} />
+          <span className="text-xl font-semibold text-slate-900 tracking-tight">trevi</span>
         </div>
       )}
 
