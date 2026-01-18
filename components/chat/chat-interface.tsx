@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, Send, Loader2, Atom, ScrollText, Cpu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Mic, Send, Loader2 } from 'lucide-react';
 import { useVoiceDictation } from '@/hooks/use-voice-dictation';
 import GradientText from '@/components/ui/gradient-text';
 
@@ -28,28 +26,25 @@ const PLACEHOLDER_QUESTIONS = [
 // Suggestion cards with icons and trending questions
 const SUGGESTION_CARDS = [
   {
-    category: "Science",
-    icon: Atom,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50",
-    borderColor: "hover:border-purple-200",
-    question: "How does mRNA vaccine technology work and what makes it different from traditional vaccines?",
+    category: "Physics",
+    color: "text-teal-600",
+    bgColor: "bg-teal-50",
+    borderColor: "border-teal-100",
+    question: "Why does time slow down near massive objects according to general relativity?",
   },
   {
-    category: "History",
-    icon: ScrollText,
-    color: "text-amber-600",
-    bgColor: "bg-amber-50",
-    borderColor: "hover:border-amber-200",
-    question: "What were the key factors that led to the Renaissance and how did it transform European society?",
+    category: "Medicine",
+    color: "text-rose-600",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-100",
+    question: "How does the human immune system distinguish between self and foreign cells?",
   },
   {
-    category: "Tech",
-    icon: Cpu,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50",
-    borderColor: "hover:border-blue-200",
-    question: "How do large language models like GPT actually understand and generate human language?",
+    category: "Philosophy",
+    color: "text-violet-600",
+    bgColor: "bg-violet-50",
+    borderColor: "border-violet-100",
+    question: "What is the relationship between collective consciousness and physical matter?",
   },
 ];
 
@@ -246,43 +241,44 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
             rows={1}
           />
 
-          {/* Action buttons - bottom right */}
-          <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-1.5 sm:gap-2">
-            {/* Mic button - shows "Speak" with mic OR "X Listening bars" */}
-            <button
-              type="button"
-              onClick={handleMicClick}
-              disabled={isLoading}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 h-9 sm:h-10 rounded-xl text-xs sm:text-sm font-medium transition-all ${isListening
-                ? 'bg-red-100 text-red-600 hover:bg-red-200 px-2.5 sm:px-3'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-700 w-9 sm:w-10'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isListening ? 'Stop listening' : 'Start voice dictation'}
-            >
-              {isListening ? (
-                <>
-                  <span className="text-red-500 font-bold">✕</span>
-                  <span>Listening</span>
-                  <InlineAudioBars level={audioLevel} />
-                </>
-              ) : (
-                <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
-            </button>
+          {/* Action buttons - bottom right - wrapped like toolbar */}
+          <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3">
+            <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex items-center gap-1">
+              {/* Mic button */}
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={isLoading}
+                className={`p-2 rounded flex items-center justify-center gap-1.5 transition-colors ${isListening
+                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isListening ? 'Stop listening' : 'Start voice dictation'}
+              >
+                {isListening ? (
+                  <>
+                    <span className="text-red-500 text-xs font-medium">✕</span>
+                    <span className="text-xs font-medium">Listening</span>
+                    <InlineAudioBars level={audioLevel} />
+                  </>
+                ) : (
+                  <Mic className="w-5 h-5" />
+                )}
+              </button>
 
-            {/* Send button */}
-            <Button
-              type="submit"
-              size="icon"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900 hover:bg-slate-800 transition-colors"
-              disabled={isLoading || !message.trim()}
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-              )}
-            </Button>
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={isLoading || !message.trim()}
+                className="p-2 rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </form>
@@ -302,31 +298,26 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
         </div>
       )}
 
-      {/* Suggestion Cards with Icons - Responsive grid */}
+      {/* Suggestion Cards - Minimal Design */}
       {!isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 w-full">
           {SUGGESTION_CARDS.map((card) => {
             const Icon = card.icon;
             return (
-              <Card
+              <button
                 key={card.category}
-                className={`p-4 sm:p-5 cursor-pointer transition-all duration-200 border-2 border-slate-100 shadow-none hover:shadow-md ${card.borderColor} group`}
+                className={`text-left p-4 rounded-xl border ${card.borderColor} bg-white hover:bg-slate-50 transition-colors duration-150 group`}
                 onClick={() => handleSuggestionClick(card.question)}
               >
-                <div className="flex items-start gap-2.5 sm:gap-3">
-                  <div className={`p-2 sm:p-2.5 rounded-xl ${card.bgColor} transition-transform group-hover:scale-110 flex-shrink-0`}>
-                    <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${card.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider ${card.color}`}>
-                      {card.category}
-                    </span>
-                    <p className="text-xs sm:text-sm font-medium text-slate-700 mt-0.5 sm:mt-1 leading-relaxed line-clamp-3">
-                      {card.question}
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${card.color}`}>
+                    {card.category}
+                  </span>
                 </div>
-              </Card>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {card.question}
+                </p>
+              </button>
             );
           })}
         </div>

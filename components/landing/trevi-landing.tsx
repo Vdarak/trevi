@@ -6,7 +6,7 @@ import { TreviLogoStatic, TreviLogoAnimation } from "@/components/ui/trevi-logo"
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Loader2 } from "lucide-react";
-import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
+import { SimpleOnboarding } from "@/components/onboarding/simple-onboarding";
 import { setUserMetadata, getUserMetadata, getChats } from "@/lib/api";
 
 export function TreviLanding() {
@@ -106,20 +106,7 @@ export function TreviLanding() {
     }
 
     if (showTour) {
-        return (
-            <OnboardingTour
-                onComplete={() => {
-                    console.log("Tour Completed, navigating to app...");
-                    // Setup redirect or callback here
-                    // For now, reload or just hide tour to simulate 'entered'
-                    // or we could use router.push('/app') if that existed
-                    window.location.href = '/';
-                }}
-                onSkip={() => {
-                    window.location.href = '/';
-                }}
-            />
-        );
+        return <SimpleOnboarding />;
     }
 
     return (

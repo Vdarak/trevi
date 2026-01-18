@@ -444,69 +444,63 @@ export function InlineResponseFeedback({
 }
 
 /**
- * Periodic feedback reminder that appears after user spends time in chat
- * Slides up from bottom, auto-dismisses or can be manually closed
+ * Feedback nudge tooltip that appears next to the feedback toolbar buttons
+ * Shows a message "Enjoying Trevi? Give us feedback!" with a close button
  */
-export function PeriodicFeedbackPrompt({
+export function FeedbackNudgeTooltip({
     onDismiss,
+    position = "right",
 }: {
     onDismiss: () => void;
+    position?: "right" | "top";
 }) {
     const [isExiting, setIsExiting] = useState(false);
 
     const handleDismiss = useCallback(() => {
         setIsExiting(true);
-        setTimeout(onDismiss, 300); // Wait for animation to complete
+        setTimeout(onDismiss, 200);
     }, [onDismiss]);
 
-    // Auto-dismiss after 15 seconds
+    // Auto-dismiss after 10 seconds
     useEffect(() => {
         const timer = setTimeout(() => {
             handleDismiss();
-        }, 15000);
+        }, 10000);
         return () => clearTimeout(timer);
     }, [handleDismiss]);
+
+    const positionClasses = position === "right"
+        ? "left-full ml-3 top-1/2 -translate-y-1/2"
+        : "bottom-full mb-3 left-1/2 -translate-x-1/2";
+
+    const arrowClasses = position === "right"
+        ? "absolute right-full top-1/2 -translate-y-1/2 border-8 border-transparent border-r-white"
+        : "absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-white";
 
     return (
         <div
             className={`
-                fixed z-[9999] 
-                bottom-24 md:bottom-8
-                inset-x-0
-                flex justify-center
-                pointer-events-none
-                ${isExiting ? 'animate-slide-down' : 'animate-slide-up'}
+                absolute ${positionClasses}
+                bg-white rounded-lg shadow-lg border border-slate-200
+                p-3 pr-2
+                flex items-center gap-2
+                whitespace-nowrap
+                z-50
+                ${isExiting ? 'animate-out fade-out zoom-out-95 duration-200' : 'animate-in fade-in zoom-in-95 duration-200'}
             `}
         >
-            <div
-                className={`
-                    mx-4 md:mx-0
-                    w-full md:w-auto md:max-w-md
-                    bg-white rounded-xl shadow-xl border border-slate-200 
-                    p-4
-                    pointer-events-auto
-                `}
+            {/* Arrow pointing to buttons */}
+            <div className={arrowClasses} />
+
+            <span className="text-sm text-slate-700">
+                Enjoying <span className="font-semibold">Trevi</span>? Give us feedback!
+            </span>
+            <button
+                onClick={handleDismiss}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
             >
-                <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-slate-700 flex-1">
-                        <span className="font-semibold">Hey!</span> Enjoying <span className="font-semibold">trevi</span>? Give us <span className="font-semibold">feedback</span>!
-                    </p>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <QuickFeedback
-                            context="general"
-                            componentName="periodic_prompt"
-                            popoverPosition="top"
-                            size="lg"
-                        />
-                        <button
-                            onClick={handleDismiss}
-                            className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                        >
-                            <X className="w-6 h-6" />
-                        </button>
-                    </div>
-                </div>
-            </div>
+                <X className="w-4 h-4" />
+            </button>
         </div>
     );
 }

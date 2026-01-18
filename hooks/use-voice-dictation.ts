@@ -63,6 +63,11 @@ export function useVoiceDictation({
   const analyzeAudio = useCallback(() => {
     if (!analyserRef.current || !isAnalyzingRef.current) return;
 
+    // Resume AudioContext if it gets suspended
+    if (audioContextRef.current?.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
 
@@ -83,6 +88,9 @@ export function useVoiceDictation({
     }
   }, []);
 
+  // Keep source ref to prevent garbage collection
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+
   // Setup audio analyzer for visual feedback
   const setupAudioAnalyzer = useCallback(async () => {
     try {
@@ -90,12 +98,19 @@ export function useVoiceDictation({
       mediaStreamRef.current = stream;
 
       audioContextRef.current = new AudioContext();
+
+      // Resume immediately in case it starts suspended
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       analyserRef.current.smoothingTimeConstant = 0.5;
 
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
+      // Keep reference to prevent GC
+      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      sourceRef.current.connect(analyserRef.current);
 
       // Start the animation loop
       isAnalyzingRef.current = true;
@@ -113,6 +128,12 @@ export function useVoiceDictation({
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
+    }
+
+    // Disconnect source before stopping stream
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
     }
 
     if (mediaStreamRef.current) {
@@ -227,6 +248,29 @@ export function useVoiceDictation({
       startListening();
     }
   }, [isListening, startListening, stopListening]);
+
+  // Stop listening when page loses focus or visibility changes
+  useEffect(() => {
+    if (!isListening) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopListening();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      stopListening();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [isListening, stopListening]);
 
   // Cleanup on unmount
   useEffect(() => {

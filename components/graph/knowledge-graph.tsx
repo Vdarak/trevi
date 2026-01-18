@@ -35,7 +35,7 @@ import { DeletableEdge, type DeletableEdgeData } from './edges/deletable-edge';
 import { Tooltip } from './ui/tooltip';
 import { ToolbarButton } from './ui/toolbar-button';
 import { StatusPill } from './ui/status-pill';
-import { QuickFeedback, PeriodicFeedbackPrompt, TreviDisclaimer } from '@/components/feedback/quick-feedback';
+import { QuickFeedback, FeedbackNudgeTooltip, TreviDisclaimer } from '@/components/feedback/quick-feedback';
 
 // Re-export types for external use
 export type { GraphNode, KnowledgeGraphProps } from './types';
@@ -831,12 +831,6 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   return (
     <div ref={containerRef} className="h-full w-full bg-slate-50 relative" onMouseMove={handleMouseMove}>
-      {/* Periodic Feedback Prompt */}
-      {showPeriodicFeedback && (
-        <PeriodicFeedbackPrompt onDismiss={handleDismissPeriodicFeedback} />
-      )}
-
-      {/* Global Status Pill - Top Center */}
       {/* Global Status Pill - Top Center */}
       {globalStatus && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
@@ -868,8 +862,8 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
       {/* Control Buttons - Bottom Left - Vertically Stacked Groups */}
       <div className="absolute bottom-4 left-4 z-30 flex flex-col gap-2">
-        {/* Quick Feedback */}
-        <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
+        {/* Quick Feedback with Nudge Tooltip */}
+        <div className="relative bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
           <QuickFeedback
             context="canvas"
             componentName="topic_tree_canvas"
@@ -877,6 +871,13 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             size="lg"
             vertical
           />
+          {/* Nudge tooltip appears from this container */}
+          {showPeriodicFeedback && (
+            <FeedbackNudgeTooltip
+              onDismiss={handleDismissPeriodicFeedback}
+              position="right"
+            />
+          )}
         </div>
 
         {/* DEPRECATED: View Mode Toggle (Panel vs Modal) - In-graph panel view deprecated, keeping modal only

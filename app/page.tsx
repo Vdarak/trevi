@@ -503,19 +503,21 @@ export default function Home() {
       {/* Mobile Hamburger Button - floating button to open sidebar (hidden when sidebar is open) */}
       {!isMobileSidebarOpen && (
         <div className="fixed top-4 left-4 z-40 md:hidden">
-          <button
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="w-12 h-12 flex items-center justify-center bg-white rounded-lg shadow-md border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+          <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-2 rounded text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       )}
 
       {/* Mobile Home Header - centered Trevi logo (only on landing page) */}
       {showLandingPage && !isMobileSidebarOpen && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center gap-2">
-          <TreviLogoStatic size={40} />
+          <TreviLogoStatic size={32} />
           <span className="text-xl font-semibold text-slate-900 tracking-tight">trevi</span>
         </div>
       )}
