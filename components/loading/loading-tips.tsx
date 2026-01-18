@@ -346,9 +346,18 @@ export function LoadingTips({ query, manualPhase, manualStepIndex }: LoadingTips
 
                 {/* Trevi Logo Animation - responsive sizing */}
                 <div className="flex-shrink-0">
-                    <TreviLogoAnimation size={80} className="sm:hidden" />
-                    <TreviLogoAnimation size={100} className="hidden sm:block md:hidden" />
-                    <TreviLogoAnimation size={140} className="hidden md:block" />
+                    {/* Mobile: 80px */}
+                    <div className="sm:hidden">
+                        <TreviLogoAnimation size={80} />
+                    </div>
+                    {/* Tablet: 100px */}
+                    <div className="hidden sm:block md:hidden">
+                        <TreviLogoAnimation size={100} />
+                    </div>
+                    {/* Desktop: 140px */}
+                    <div className="hidden md:block">
+                        <TreviLogoAnimation size={140} />
+                    </div>
                 </div>
 
                 {/* Text stacked vertically: "Trevi is exploring..." + Query */}
