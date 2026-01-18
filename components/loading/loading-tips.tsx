@@ -145,6 +145,39 @@ export const PRO_TIPS = [
 ];
 
 // ============================================================================
+// Typewriter Text Component
+// ============================================================================
+
+function TypewriterText({ text, className }: { text: string, className?: string }) {
+    const [displayedText, setDisplayedText] = useState("");
+
+    useEffect(() => {
+        let index = 0;
+        setDisplayedText(""); // Reset when text changes
+
+        const timer = setInterval(() => {
+            if (index < text.length) {
+                setDisplayedText((prev) => prev + text.charAt(index));
+                index++;
+            } else {
+                clearInterval(timer);
+            }
+        }, 40); // 40ms per char speed
+
+        return () => clearInterval(timer);
+    }, [text]);
+
+    return (
+        <span className={className}>
+            {displayedText}
+            {displayedText.length < text.length && (
+                <span className="inline-block w-[2px] h-[1em] bg-blue-500 animate-pulse ml-0.5 align-middle" />
+            )}
+        </span>
+    );
+}
+
+// ============================================================================
 // Loading Dots Component
 // ============================================================================
 
@@ -174,10 +207,6 @@ function LoadingDots() {
 // Explainer Step Component (Node-styled with tooltip)
 // ============================================================================
 
-// ============================================================================
-// Explainer Step Component (Node-styled with tooltip)
-// ============================================================================
-
 interface ExplainerStepProps {
     keyword: string;
     description: string;
@@ -188,21 +217,29 @@ interface ExplainerStepProps {
 
 function ExplainerStep({ keyword, description, isActive, isExplained, canHover }: ExplainerStepProps) {
     const [showTooltip, setShowTooltip] = useState(false);
-    const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
+    // Auto-show tooltip logic for entrance animation
+    useEffect(() => {
+        if (isActive) {
+            // "once explore appears then after that the tooltip"
+            // Wait 500ms after active (keyword entrance) before showing tooltip
+            const timer = setTimeout(() => {
+                setShowTooltip(true);
+            }, 600);
+            return () => clearTimeout(timer);
+        } else {
+            setShowTooltip(false);
+        }
+    }, [isActive]);
+
+    // Manual hover support (only if canHover is true and not actively animating entrance)
     const handleMouseEnter = () => {
-        if (!canHover) return;
-        const timeout = setTimeout(() => setShowTooltip(true), 200);
-        setHoverTimeout(timeout);
+        if (canHover && !isActive) setShowTooltip(true);
     };
 
     const handleMouseLeave = () => {
-        if (hoverTimeout) clearTimeout(hoverTimeout);
-        setShowTooltip(false);
+        if (!isActive) setShowTooltip(false);
     };
-
-    // Show description when active (during Phase 1 animation)
-    const shouldShowDescription = isActive || showTooltip;
 
     return (
         <div
@@ -212,10 +249,12 @@ function ExplainerStep({ keyword, description, isActive, isExplained, canHover }
         >
             {/* Node-styled keyword */}
             <motion.div
+                initial={false}
                 animate={{
-                    scale: isActive ? 1.05 : 1,
+                    scale: isActive ? 1.1 : 1,
+                    y: isActive ? -2 : 0
                 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.4, type: "spring" }}
                 className={cn(
                     "px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 cursor-default",
                     isActive || isExplained
@@ -230,13 +269,13 @@ function ExplainerStep({ keyword, description, isActive, isExplained, canHover }
 
             {/* Tooltip-styled description - intelligently positioned */}
             <AnimatePresence>
-                {shouldShowDescription && (
+                {showTooltip && (
                     <motion.div
-                        initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                        initial={{ opacity: 0, y: 5, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute top-full mt-2 z-20 left-1/2 -translate-x-1/2"
+                        exit={{ opacity: 0, y: 5, scale: 0.9 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        className="absolute top-full mt-3 z-20 left-1/2 -translate-x-1/2"
                     >
                         {/* Tooltip arrow */}
                         <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-slate-800 rotate-45" />
@@ -252,7 +291,7 @@ function ExplainerStep({ keyword, description, isActive, isExplained, canHover }
 }
 
 // ============================================================================
-// Explainer Component (Phase 1 - always visible, animates sequentially)
+// Explainer Component (Phase 1)
 // ============================================================================
 
 interface ExplainerProps {
@@ -264,11 +303,14 @@ function Explainer({ activeStep, isCondensed }: ExplainerProps) {
     return (
         <div className="flex flex-col items-center w-full">
             {/* About Trevi title pill */}
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-6">
+            <motion.span
+                layout
+                className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-6"
+            >
                 About Trevi
-            </span>
+            </motion.span>
 
-            {/* Steps row - no wrap to keep arrows in line */}
+            {/* Steps row */}
             <div className="flex items-center justify-center gap-1 sm:gap-4 w-full">
                 {EXPLAINER_STEPS.map((step, i) => (
                     <React.Fragment key={i}>
@@ -280,7 +322,7 @@ function Explainer({ activeStep, isCondensed }: ExplainerProps) {
                             canHover={i <= activeStep || isCondensed}
                         />
 
-                        {/* Connector chevron - always visible, smaller gap on mobile */}
+                        {/* Connector chevron */}
                         {i < EXPLAINER_STEPS.length - 1 && (
                             <ChevronRight className={cn(
                                 "w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0 transition-colors duration-300",
@@ -298,25 +340,46 @@ function Explainer({ activeStep, isCondensed }: ExplainerProps) {
 // Main Loading Tips Component
 // ============================================================================
 
-interface LoadingTipsProps {
+export interface LoadingTipsProps {
     query?: string;
     manualPhase?: 1 | 2;
     manualStepIndex?: number;
+    isFinished?: boolean;
+    onTransitionComplete?: () => void;
 }
 
-export function LoadingTips({ query, manualPhase, manualStepIndex }: LoadingTipsProps) {
+export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, onTransitionComplete }: LoadingTipsProps) {
     const [phase, setPhase] = useState<1 | 2>(1);
     const [stepIndex, setStepIndex] = useState(0);
+    const [hasStarted, setHasStarted] = useState(false);
 
-    const currentPhase = manualPhase ?? phase;
-    const currentStepIndex = manualStepIndex ?? stepIndex;
+    // UI states for exit sequence
+    const [showTips, setShowTips] = useState(true);
+    const [showExplainer, setShowExplainer] = useState(true);
+    const [isSuccessState, setIsSuccessState] = useState(false);
 
+    // Persist query to prevent flicker when parent clears it on success
+    const [keptQuery, setKeptQuery] = useState(query);
     useEffect(() => {
-        if (manualPhase !== undefined) return;
+        if (query) setKeptQuery(query);
+    }, [query]);
+
+    // Initial delay: "brief delay, once the user has read what it is exploring"
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setHasStarted(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Phase/Step progression
+    useEffect(() => {
+        if (manualPhase !== undefined || !hasStarted || isFinished) return;
 
         let interval: NodeJS.Timeout;
 
         if (phase === 1) {
+            // Phase 1: 3s per step (enough time for keyword + staggered tooltip)
             interval = setInterval(() => {
                 setStepIndex(prev => {
                     if (prev < EXPLAINER_STEPS.length - 1) {
@@ -326,25 +389,61 @@ export function LoadingTips({ query, manualPhase, manualStepIndex }: LoadingTips
                         return 0;
                     }
                 });
-            }, 3000); // 3s per explainer step
+            }, 3000);
         } else {
+            // Phase 2: 6s per tip
             interval = setInterval(() => {
                 setStepIndex(prev => (prev + 1) % PRO_TIPS.length);
-            }, 6000); // 6s per pro tip
+            }, 6000);
         }
 
         return () => clearInterval(interval);
-    }, [phase, manualPhase]);
+    }, [phase, manualPhase, hasStarted, isFinished]);
+
+    // Handle Finish/Success Sequence
+    useEffect(() => {
+        if (isFinished) {
+            setIsSuccessState(true);
+
+            // Sequence:
+            // 0ms: Text changes (handled by render)
+            // 0ms: Start fading out tips (Phase 2) if visible
+            setShowTips(false);
+
+            // 800ms: Fade out Explainer (Phase 1)
+            const t1 = setTimeout(() => {
+                setShowExplainer(false);
+            }, 800);
+
+            // 1800ms: Complete transition (guides user to canvas)
+            const t2 = setTimeout(() => {
+                if (onTransitionComplete) onTransitionComplete();
+            }, 2000);
+
+            return () => {
+                clearTimeout(t1);
+                clearTimeout(t2);
+            };
+        }
+    }, [isFinished, onTransitionComplete]);
+
+    const currentPhase = manualPhase ?? phase;
+    const currentStepIndex = manualStepIndex ?? stepIndex;
+
+    // Derived visual states helpers
+    const showingPhase1 = hasStarted && currentPhase === 1 && showExplainer;
+    const showingPhase2 = hasStarted && currentPhase === 2 && showTips;
+    const showingCondensedPhase1 = hasStarted && currentPhase === 2 && showExplainer; // Explainer condensed at top in Phase 2
 
     return (
         <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-white relative overflow-hidden px-4 py-8">
             {/* Background radial gradient */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-50/50 via-transparent to-transparent opacity-60" />
 
-            {/* Header section: Logo LEFT, Text RIGHT - always side-by-side */}
+            {/* Header section: Logo LEFT, Text RIGHT */}
             <div className="relative z-10 flex flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10 w-full max-w-3xl mx-auto mb-6">
 
-                {/* Trevi Logo Animation - responsive sizing */}
+                {/* Trevi Logo Animation */}
                 <div className="flex-shrink-0">
                     {/* Mobile: 80px */}
                     <div className="sm:hidden">
@@ -360,42 +459,70 @@ export function LoadingTips({ query, manualPhase, manualStepIndex }: LoadingTips
                     </div>
                 </div>
 
-                {/* Text stacked vertically: "Trevi is exploring..." + Query */}
-                <div className="flex flex-col items-start text-left gap-0.5">
-                    <p className="text-xs sm:text-sm md:text-base text-slate-500 font-medium flex items-center">
-                        Trevi is exploring your curiosity<LoadingDots />
-                    </p>
-                    {query && (
-                        <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
-                            "{query}"
+                {/* Text stacked vertically */}
+                <div className="flex flex-col items-start text-left gap-0.5 min-w-[200px]">
+                    <div className="h-6 flex items-center">
+                        <p className={cn(
+                            "text-xs sm:text-sm md:text-base font-medium flex items-center transition-colors duration-500",
+                            isSuccessState ? "text-green-600" : "text-slate-500"
+                        )}>
+                            {isSuccessState ? (
+                                <TypewriterText text="Trevi has finished exploring" className="font-semibold" />
+                            ) : (
+                                <>
+                                    Trevi is exploring your curiosity
+                                    <LoadingDots />
+                                </>
+                            )}
                         </p>
-                    )}
+                    </div>
+                    <div className="min-h-[1.5em] flex items-center">
+                        {isSuccessState ? (
+                            <p className="text-sm sm:text-base md:text-xl font-bold text-slate-900">
+                                <TypewriterText text="Your topic tree is ready!" />
+                            </p>
+                        ) : keptQuery ? (
+                            <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
+                                "{keptQuery}"
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
             </div>
 
-            {/* Explainer section - centered underneath header */}
-            <div className="relative z-10 w-full max-w-2xl mx-auto">
-                {/* Top Separator */}
-                <div className="w-full h-px bg-slate-200 mb-8" />
-
-                <div className="pb-12"> {/* Extra padding for tooltip space */}
-                    <Explainer
-                        activeStep={currentPhase === 1 ? currentStepIndex : EXPLAINER_STEPS.length - 1}
-                        isCondensed={currentPhase === 2}
-                    />
-                </div>
-
-                {/* Bottom Separator */}
-                <div className="w-full h-px bg-slate-200 mb-8" />
-            </div>
-
-            {/* Pro Tips section (Phase 2) - appears after Phase 1 */}
+            {/* Explainer section - Phase 1 */}
             <AnimatePresence>
-                {currentPhase === 2 && (
+                {(showingPhase1 || showingCondensedPhase1) && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 20 }}
+                        exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                        transition={{ duration: 0.6 }}
+                        className="relative z-10 w-full max-w-2xl mx-auto"
+                    >
+                        {/* Top Separator - Only show if tips haven't started (Phase 1) or condensed */}
+                        <div className="w-full h-px bg-slate-200 mb-8" />
+
+                        <div className="pb-12">
+                            <Explainer
+                                activeStep={currentPhase === 1 ? currentStepIndex : EXPLAINER_STEPS.length - 1}
+                                isCondensed={currentPhase === 2}
+                            />
+                        </div>
+
+                        {/* Bottom Separator */}
+                        <div className="w-full h-px bg-slate-200 mb-8" />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Pro Tips section (Phase 2) */}
+            <AnimatePresence>
+                {showingPhase2 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ duration: 0.5 }}
                         className="relative z-10 w-full max-w-xl mx-auto"
                     >

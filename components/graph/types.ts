@@ -21,7 +21,7 @@ export interface KnowledgeGraphProps {
     rootNodeIds?: string[]; // Multiple roots for multi-graph support
     onNodeClick?: (nodeId: string) => void;
     onDirectionClick?: (nodeId: string) => void; // Callback for clicking direction nodes
-    onDeleteNode?: (nodeId: string) => void; // Callback for deleting a node and its descendants
+    onDeleteNode?: (nodeId: string) => Promise<void>; // Callback for deleting a node and its descendants
     loadingNodeIds?: Set<string> | string[] | null; // Node IDs currently being loaded
     onToggleChatSidebar?: () => void; // Toggle full conversation sidebar
     isChatSidebarOpen?: boolean; // Whether the chat sidebar is open
@@ -29,6 +29,7 @@ export interface KnowledgeGraphProps {
     onNodeMessage?: (nodeId: string, message: string) => void; // Callback for sending message from node panel
     isNodeStreaming?: boolean; // Whether a node panel is currently streaming
     nodeStatusMessage?: string; // Status message for node panel streaming
+    nodeStreamUserMessage?: string; // Optimistic user data (bubble content)
     // Global status indicator
     globalStatus?: GlobalStatus;
 }
@@ -81,6 +82,7 @@ export interface ConversationPanelNodeData {
     onSendMessage?: (message: string) => void;
     isStreaming?: boolean;
     statusMessage?: string;
+    streamUserMessage?: string;
 }
 
 // ============================================================================

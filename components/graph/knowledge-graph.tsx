@@ -59,7 +59,7 @@ const edgeTypes = {
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, globalStatus }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus }: KnowledgeGraphProps) {
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -78,6 +78,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     isOpen: boolean;
     nodeId: string;
     nodeLabel: string;
+    status: 'confirm' | 'deleting' | 'success';
   } | null>(null);
 
   // Periodic feedback prompt state
@@ -310,7 +311,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             direction,
             onRequestDelete: () => {
               const nodeLabel = graphNodes.find(n => n.id === node.id)?.label || 'this branch';
-              setDeleteConfirmation({ isOpen: true, nodeId: node.id, nodeLabel });
+              setDeleteConfirmation({ isOpen: true, nodeId: node.id, nodeLabel, status: 'confirm' });
             },
           } as DeletableEdgeData,
         };
@@ -790,6 +791,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
                 onSendMessage: onNodeMessage ? (msg: string) => onNodeMessage(node.id, msg) : undefined,
                 isStreaming: isNodeStreaming,
                 statusMessage: nodeStatusMessage,
+                streamUserMessage: nodeStreamUserMessage,
               },
               draggable: false,
               selectable: false,
@@ -818,7 +820,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         setSelectedNodePanel(null);
       }
     },
-    [onNodeClick, graphNodes, setNodes, setEdges, viewMode, onNodeMessage, isNodeStreaming, nodeStatusMessage, getNodes]
+    [onNodeClick, graphNodes, setNodes, setEdges, viewMode, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, getNodes]
   );
 
   if (graphNodes.length === 0) {
@@ -1018,6 +1020,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           onSendMessage={onNodeMessage ? (msg: string) => onNodeMessage(modalData.nodeId, msg) : undefined}
           isStreaming={isNodeStreaming}
           statusMessage={nodeStatusMessage}
+          streamUserMessage={nodeStreamUserMessage}
           clickPosition={modalData.clickPosition}
         />
       )}
@@ -1029,37 +1032,72 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             className="bg-white rounded-xl shadow-2xl border border-slate-200 p-5 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+            {deleteConfirmation.status === 'success' ? (
+              // Success state
+              <div className="flex flex-col items-center py-4">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Branch deleted</h3>
+                <p className="text-sm text-slate-500 mt-1">Successfully deleted</p>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Delete branch?</h3>
-                <p className="text-sm text-slate-500">This action cannot be undone</p>
+            ) : deleteConfirmation.status === 'deleting' ? (
+              // Deleting state
+              <div className="flex flex-col items-center py-4">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                  <svg className="w-6 h-6 text-slate-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Deleting...</h3>
+                <p className="text-sm text-slate-500 mt-1">Please wait</p>
               </div>
-            </div>
-            <p className="text-sm text-slate-600 mb-5">
-              This will permanently delete <span className="font-medium text-slate-900">"{deleteConfirmation.nodeLabel}"</span> and all of its children.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirmation(null)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteNode?.(deleteConfirmation.nodeId);
-                  setDeleteConfirmation(null);
-                }}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
-              >
-                Delete
-              </button>
-            </div>
+            ) : (
+              // Confirm state
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Delete branch?</h3>
+                    <p className="text-sm text-slate-500">This action cannot be undone</p>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 mb-5">
+                  This will permanently delete <span className="font-medium text-slate-900">"{deleteConfirmation.nodeLabel}"</span> and all of its children.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirmation(null)}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const { nodeId, nodeLabel } = deleteConfirmation;
+                      setDeleteConfirmation({ isOpen: true, nodeId, nodeLabel, status: 'deleting' });
+                      try {
+                        await onDeleteNode?.(nodeId);
+                        setDeleteConfirmation({ isOpen: true, nodeId, nodeLabel, status: 'success' });
+                        setTimeout(() => setDeleteConfirmation(null), 1500);
+                      } catch (error) {
+                        setDeleteConfirmation(null);
+                      }
+                    }}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

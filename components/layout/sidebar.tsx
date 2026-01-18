@@ -47,6 +47,12 @@ export function Sidebar({
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    chatId: string;
+    chatName: string;
+    status: 'confirm' | 'deleting' | 'success';
+  } | null>(null);
 
   const fetchChatsAndCheckUser = async () => {
     try {
@@ -85,21 +91,39 @@ export function Sidebar({
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent chat selection
 
-    if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
-      return;
-    }
+    // Find the chat name for the confirmation modal
+    const chat = chats.find(c => c.chat_id === chatId);
+    const chatName = chat?.chat_name || 'this chat';
 
-    setDeletingChatId(chatId);
+    // Show confirmation modal instead of browser confirm
+    setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'confirm' });
+  };
+
+  // Actually perform the deletion after confirmation
+  const confirmDeleteChat = async () => {
+    if (!deleteConfirmation) return;
+
+    const { chatId, chatName } = deleteConfirmation;
+    // Show deleting state
+    setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'deleting' });
+
     try {
       await deleteChat(chatId);
       // Refresh chats after deletion
       const response = await getChats();
       setChats(response.chats);
-      onChatDeleted?.();
+
+      // Show success state
+      setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'success' });
+
+      // Auto-close after showing success
+      setTimeout(() => {
+        setDeleteConfirmation(null);
+        onChatDeleted?.();
+      }, 1500);
     } catch (error) {
       console.error("Failed to delete chat:", error);
-    } finally {
-      setDeletingChatId(null);
+      setDeleteConfirmation(null);
     }
   };
 
@@ -255,6 +279,73 @@ export function Sidebar({
         {/* Feedback Modal */}
         <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation?.isOpen && (
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            className="bg-white rounded-xl shadow-2xl border border-slate-200 p-5 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {deleteConfirmation.status === 'success' ? (
+              // Success state
+              <div className="flex flex-col items-center py-4">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Chat deleted</h3>
+                <p className="text-sm text-slate-500 mt-1">Successfully deleted</p>
+              </div>
+            ) : deleteConfirmation.status === 'deleting' ? (
+              // Deleting state
+              <div className="flex flex-col items-center py-4">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                  <svg className="w-6 h-6 text-slate-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">Deleting...</h3>
+                <p className="text-sm text-slate-500 mt-1">Please wait</p>
+              </div>
+            ) : (
+              // Confirm state
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">Delete chat?</h3>
+                    <p className="text-sm text-slate-500">This action cannot be undone</p>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 mb-5">
+                  This will permanently delete <span className="font-medium text-slate-900">"{deleteConfirmation.chatName}"</span> and all of its conversations.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirmation(null)}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmDeleteChat}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

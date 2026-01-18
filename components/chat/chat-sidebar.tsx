@@ -28,6 +28,7 @@ interface ChatSidebarProps {
     activeNodeId?: string;
     isStreaming: boolean;
     statusMessage: string;
+    streamUserMessage?: string;
     onSendMessage: (message: string) => void;
     onEditMessage?: (nodeId: string, newMessage: string) => void;
     onClose: () => void;
@@ -52,6 +53,7 @@ export function ChatSidebar({
     activeNodeId,
     isStreaming,
     statusMessage,
+    streamUserMessage,
     onSendMessage,
     onEditMessage,
     onClose,
@@ -463,7 +465,7 @@ export function ChatSidebar({
                                         <div className="pt-4 border-t border-slate-100 animate-fade-in">
                                             <MessageBubble
                                                 role="user"
-                                                content={statusMessage || ""}
+                                                content={streamUserMessage || statusMessage || ""}
                                             />
                                         </div>
 

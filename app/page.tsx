@@ -35,6 +35,7 @@ export default function Home() {
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [isLoadingTransition, setIsLoadingTransition] = useState(false); // Visual transition state
   // Multi-connection state for parallel explorations
   const connectionManagerRef = useRef(new ConnectionManager());
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
@@ -55,6 +56,15 @@ export default function Home() {
   // Chat sidebar state (full conversation)
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+
+  // Node conversation panel streaming state (for modal)
+  const [isNodeStreaming, setIsNodeStreaming] = useState(false);
+  const [nodeStatusMessage, setNodeStatusMessage] = useState('');
+
+  // Separate states for the "User Message" bubble content vs the "Status Line" text
+  // This allows the bubble to show "Explore X in relation to Y" while status shows "X"
+  const [streamingUserMessage, setStreamingUserMessage] = useState<string>("");
+  const [nodeStreamingUserMessage, setNodeStreamingUserMessage] = useState<string>("");
 
   // Mobile state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -109,7 +119,9 @@ export default function Home() {
   const handleSendMessage = useCallback(async (message: string) => {
     setIsLoading(true);
     setIsCreatingChat(true);
+    setIsLoadingTransition(true);
     setStatusMessage(message);
+    setStreamingUserMessage(message); // Same for normal messages
     setProcessingQuery(message);
     setIsStreaming(true);
 
@@ -149,6 +161,7 @@ export default function Home() {
 
           setIsStreaming(false);
           setStatusMessage("");
+          setStreamingUserMessage("");
           setProcessingQuery(null);
           setIsLoading(false);
           setIsCreatingChat(false);
@@ -184,7 +197,12 @@ export default function Home() {
 
     setIsStreaming(true);
     setStatusMessage(message);
+    setStreamingUserMessage(message); // Same for normal messages
     setProcessingQuery(message);
+    // Sync with node streaming state for modal
+    setIsNodeStreaming(true);
+    setNodeStatusMessage(message);
+    setNodeStreamingUserMessage(message);
 
     try {
       const request = createFollowUpRequest(message, currentChatId, currentNodeId);
@@ -193,6 +211,7 @@ export default function Home() {
         request,
         (update) => {
           setStatusMessage(update.message);
+          setNodeStatusMessage(update.message);
         },
         (event) => {
           setCurrentNodeId(event.node_id);
@@ -206,13 +225,21 @@ export default function Home() {
 
           setIsStreaming(false);
           setStatusMessage("");
+          setStreamingUserMessage("");
           setProcessingQuery(null);
+          // Also clear node streaming state
+          setIsNodeStreaming(false);
+          setNodeStatusMessage("");
+          setNodeStreamingUserMessage("");
         },
         (error) => {
           console.error("Follow-up error:", error);
           setStatusMessage(`Error: ${error.error}`);
           setIsStreaming(false);
           setProcessingQuery(null);
+          setIsNodeStreaming(false);
+          setNodeStatusMessage("");
+          setNodeStreamingUserMessage("");
         }
       );
     } catch (error) {
@@ -220,6 +247,9 @@ export default function Home() {
       setStatusMessage("Failed to send message");
       setIsStreaming(false);
       setProcessingQuery(null);
+      setIsNodeStreaming(false);
+      setNodeStatusMessage("");
+      setNodeStreamingUserMessage("");
     }
   }, [currentChatId, currentNodeId, isStreaming]);
 
@@ -228,6 +258,7 @@ export default function Home() {
 
     setIsStreaming(true);
     setStatusMessage(newMessage); // Show the new query as status
+    setStreamingUserMessage(newMessage);
     setProcessingQuery(newMessage);
 
     try {
@@ -253,40 +284,31 @@ export default function Home() {
   }, [currentChatId, isStreaming]);
 
   // Handle deleting a node and all its descendants
-  const handleDeleteNode = useCallback(async (nodeId: string) => {
-    if (!currentChatId) return;
+  const handleDeleteNode = useCallback(async (nodeId: string): Promise<void> => {
+    if (!currentChatId) {
+      throw new Error("No chat selected");
+    }
 
     // Don't allow deletion while exploring/streaming
     const isAnyLoading = loadingNodeIds.size > 0 || isStreaming || isLoading;
     if (isAnyLoading) {
-      setStatusMessage("Cannot delete while exploring");
-      setTimeout(() => setStatusMessage(""), 3000);
-      return;
+      throw new Error("Cannot delete while exploring");
     }
 
-    try {
-      setStatusMessage("Deleting branch...");
-      const response = await deleteNode(currentChatId, nodeId);
+    const response = await deleteNode(currentChatId, nodeId);
 
-      // Update current node to what the API returns (parent of deleted node)
-      setCurrentNodeId(response.current_node);
+    // Update current node to what the API returns (parent of deleted node)
+    setCurrentNodeId(response.current_node);
 
-      // Update graph with the new data from API response
-      const graphResponse = {
-        session_id: response.session_id,
-        chat_id: response.chat_id,
-        graph: response.graph,
-        current_node: response.current_node,
-      };
-      const { nodes } = buildGraphNodesFromResponse(graphResponse);
-      setGraphNodes(nodes);
-
-      setStatusMessage("");
-    } catch (error) {
-      console.error("Failed to delete node:", error);
-      setStatusMessage("Failed to delete branch");
-      setTimeout(() => setStatusMessage(""), 3000);
-    }
+    // Update graph with the new data from API response
+    const graphResponse = {
+      session_id: response.session_id,
+      chat_id: response.chat_id,
+      graph: response.graph,
+      current_node: response.current_node,
+    };
+    const { nodes } = buildGraphNodesFromResponse(graphResponse);
+    setGraphNodes(nodes);
   }, [currentChatId, loadingNodeIds, isStreaming, isLoading]);
 
   // Handle selecting a chat from left sidebar
@@ -351,12 +373,26 @@ export default function Home() {
     // Check if this specific node is already loading
     if (connectionManagerRef.current.isLoading(nodeId)) return;
 
-    // Get node label for status display
-    const nodeLabel = graphNodes.find(n => n.id === nodeId)?.label || 'topic';
+    // Get node and parent labels for formatted explore message
+    const clickedNode = graphNodes.find(n => n.id === nodeId);
+    const nodeLabel = clickedNode?.label || 'topic';
+    const parentNode = clickedNode?.parentId ? graphNodes.find(n => n.id === clickedNode.parentId) : null;
+    const parentLabel = parentNode?.label || 'root';
+
+    // Create formatted explore message
+    const exploreMessage = `|-> Explore - '${nodeLabel}' in relation to - '${parentLabel}'`;
 
     // Start tracking this connection
     const abortController = connectionManagerRef.current.start(nodeId, nodeLabel);
     setIsStreaming(true);
+    setStatusMessage(nodeLabel); // Short label for status
+    setProcessingQuery(nodeLabel); // Short label for global pill
+    setStreamingUserMessage(exploreMessage); // Long message for bubble
+
+    // Also sync with node streaming state for modals
+    setNodeStatusMessage(nodeLabel); // Short label
+    setNodeStreamingUserMessage(exploreMessage); // Long message
+    setIsNodeStreaming(true);
     // Auto-open sidebar when exploring a direction
     setIsChatSidebarOpen(true);
 
@@ -392,7 +428,13 @@ export default function Home() {
               // Clear status if no more active connections
               if (connectionManagerRef.current.getActiveCount() === 0) {
                 setStatusMessage("");
+                setProcessingQuery(null);
+                setStreamingUserMessage("");
                 setIsStreaming(false);
+                // Also clear node streaming state
+                setNodeStatusMessage("");
+                setNodeStreamingUserMessage("");
+                setIsNodeStreaming(false);
               }
             });
         },
@@ -402,6 +444,11 @@ export default function Home() {
 
           if (connectionManagerRef.current.getActiveCount() === 0) {
             setIsStreaming(false);
+            setIsNodeStreaming(false);
+            setNodeStatusMessage("");
+            setNodeStreamingUserMessage("");
+            setProcessingQuery(null);
+            setStreamingUserMessage("");
           }
         },
         { signal: abortController.signal }
@@ -419,6 +466,9 @@ export default function Home() {
 
       if (connectionManagerRef.current.getActiveCount() === 0) {
         setIsStreaming(false);
+        setIsNodeStreaming(false);
+        setNodeStatusMessage("");
+        setProcessingQuery(null);
       }
     }
   }, [currentChatId, graphNodes]);
@@ -430,10 +480,6 @@ export default function Home() {
     setIsChatSidebarOpen(true);
   }, []);
 
-  // State for node conversation panel streaming
-  const [isNodeStreaming, setIsNodeStreaming] = useState(false);
-  const [nodeStatusMessage, setNodeStatusMessage] = useState('');
-
   // Handle sending a message from node conversation panel (uses query mode)
   const handleNodeMessage = useCallback(async (nodeId: string, message: string) => {
     if (!currentChatId || isNodeStreaming) return;
@@ -441,6 +487,9 @@ export default function Home() {
     setIsNodeStreaming(true);
     setNodeStatusMessage(message);
     setProcessingQuery(message);
+    // Sync with sidebar streaming state
+    setIsStreaming(true);
+    setStatusMessage(message);
 
     try {
       const request = createFollowUpRequest(message, currentChatId, nodeId);
@@ -449,6 +498,7 @@ export default function Home() {
         request,
         (update) => {
           setNodeStatusMessage(update.message);
+          setStatusMessage(update.message);
         },
         (event) => {
           // Update current node to the new response node
@@ -465,12 +515,17 @@ export default function Home() {
           setIsNodeStreaming(false);
           setNodeStatusMessage("");
           setProcessingQuery(null);
+          // Also clear sidebar streaming state
+          setIsStreaming(false);
+          setStatusMessage("");
         },
         (error) => {
           console.error("Node message error:", error);
           setNodeStatusMessage(`Error: ${error.error}`);
           setIsNodeStreaming(false);
           setProcessingQuery(null);
+          setIsStreaming(false);
+          setStatusMessage("");
         }
       );
     } catch (error) {
@@ -478,6 +533,8 @@ export default function Home() {
       setNodeStatusMessage("Failed to send message");
       setIsNodeStreaming(false);
       setProcessingQuery(null);
+      setIsStreaming(false);
+      setStatusMessage("");
     }
   }, [currentChatId, isNodeStreaming]);
 
@@ -495,7 +552,7 @@ export default function Home() {
 
   // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
-  const showLoadingPage = isCreatingChat;
+  const showLoadingPage = isCreatingChat || isLoadingTransition;
   const showGraphPage = !!currentChatId && graphNodes.length > 0 && !isCreatingChat;
 
   return (
@@ -562,7 +619,11 @@ export default function Home() {
         {/* Graph/Content Area */}
         <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
-            <GraphLoading query={processingQuery || undefined} />
+            <GraphLoading
+              query={processingQuery || undefined}
+              isFinished={!isCreatingChat && isLoadingTransition}
+              onTransitionComplete={() => setIsLoadingTransition(false)}
+            />
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab
             <div className={`h-full ${mobileActiveTab === 'chat' ? 'hidden md:block' : ''}`}>
@@ -579,6 +640,7 @@ export default function Home() {
                 onNodeMessage={handleNodeMessage}
                 isNodeStreaming={isNodeStreaming}
                 nodeStatusMessage={nodeStatusMessage}
+                nodeStreamUserMessage={nodeStreamingUserMessage}
                 globalStatus={{
                   isActive: isStreaming || isNodeStreaming || isLoading || loadingNodeIds.size > 0,
                   message: statusMessage || nodeStatusMessage,
@@ -618,6 +680,7 @@ export default function Home() {
             activeNodeId={currentNodeId || undefined}
             isStreaming={isStreaming}
             statusMessage={statusMessage}
+            streamUserMessage={streamingUserMessage}
             onSendMessage={handleSidebarMessage}
             onEditMessage={handleEditMessage}
             onClose={() => { setIsChatSidebarOpen(false); setMobileActiveTab('graph'); }}

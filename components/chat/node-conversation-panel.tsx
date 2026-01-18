@@ -16,6 +16,7 @@ interface NodeConversationPanelProps {
     onSendMessage?: (message: string) => void;
     isStreaming?: boolean;
     statusMessage?: string;
+    streamUserMessage?: string; // For the optimistic bubble content (can be different from status line)
     clickPosition?: { x: number; y: number }; // For modal animation origin
 }
 
@@ -32,6 +33,7 @@ export function NodeConversationPanel({
     onSendMessage,
     isStreaming = false,
     statusMessage = '',
+    streamUserMessage,
 }: NodeConversationPanelProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -109,7 +111,7 @@ export function NodeConversationPanel({
                     <div className="mt-4 pt-4 border-t border-slate-100 animate-fade-in">
                         <div className="flex flex-col gap-1 items-end">
                             <div className="bg-slate-100 text-slate-800 px-4 py-2 rounded-2xl rounded-tr-sm max-w-[85%]">
-                                {statusMessage}
+                                {streamUserMessage || statusMessage}
                             </div>
                         </div>
                     </div>
@@ -169,6 +171,7 @@ export function NodeConversationModal({
     onSendMessage,
     isStreaming = false,
     statusMessage = '',
+    streamUserMessage,
     clickPosition,
 }: NodeConversationPanelProps) {
     const modalRef = useRef<HTMLDivElement>(null);
@@ -271,7 +274,7 @@ export function NodeConversationModal({
                         <div className="mt-4 pt-4 border-t border-slate-100 animate-fade-in">
                             <div className="flex flex-col gap-1 items-end">
                                 <div className="bg-slate-100 text-slate-800 px-4 py-2 rounded-2xl rounded-tr-sm max-w-[85%]">
-                                    {statusMessage}
+                                    {streamUserMessage || statusMessage}
                                 </div>
                             </div>
                         </div>
