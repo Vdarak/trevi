@@ -560,7 +560,7 @@ export default function Home() {
         {/* Graph/Content Area */}
         <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
-            <GraphLoading />
+            <GraphLoading query={processingQuery || undefined} />
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab
             <div className={`h-full ${mobileActiveTab === 'chat' ? 'hidden md:block' : ''}`}>

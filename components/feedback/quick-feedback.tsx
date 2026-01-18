@@ -335,7 +335,7 @@ export function QuickFeedback({
                     <div className="p-3">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-sm text-slate-600">
+                            <span className="text-sm font-bold text-slate-600">
                                 {showSuccess ? (
                                     <>&nbsp;</>
                                 ) : (
@@ -343,7 +343,6 @@ export function QuickFeedback({
                                         {feedbackType === "up"
                                             ? "What did you like?"
                                             : "What could be better?"}
-                                        <span className="text-slate-400 ml-1">(optional)</span>
                                     </>
                                 )}
                             </span>
