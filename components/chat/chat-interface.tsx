@@ -302,7 +302,6 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       {!isLoading && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 w-full">
           {SUGGESTION_CARDS.map((card) => {
-            const Icon = card.icon;
             return (
               <button
                 key={card.category}
