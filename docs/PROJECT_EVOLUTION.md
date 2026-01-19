@@ -878,4 +878,438 @@ Value: Would users choose this over ChatGPT + manual note-taking?
 
 ---
 
+## API Architecture
+
+> **Complete reference for Trevi's backend communication layer** — 12 endpoints powering session management, messaging, graph visualization, and analytics.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              TREVI FRONTEND                                  │
+│                            (Next.js / React)                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │  All requests via /api proxy
+                                      │  (Same-origin for cookies)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           NEXT.JS REWRITE PROXY                              │
+│                     /api/:path* → backend:8000/:path*                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              TREVI BACKEND                                   │
+│                           (Python / FastAPI)                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │  Session Mgmt   │  │   Messaging     │  │   Graph & Analytics         │  │
+│  │  ─────────────  │  │  ───────────    │  │  ─────────────────────      │  │
+│  │  • user-metadata│  │  • messages     │  │  • graph                    │  │
+│  │  • chats        │  │  • messages/    │  │  • history                  │  │
+│  │  • feedback     │  │    status       │  │  • bibliography             │  │
+│  │                 │  │  • chat/edit    │  │  • trevi-brief              │  │
+│  │                 │  │  • chat/delete  │  │                             │  │
+│  │                 │  │  • delete/node  │  │                             │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### API Endpoint Reference
+
+#### Session Management APIs
+
+| Endpoint | Method | Purpose | Request Body | Response |
+|----------|--------|---------|--------------|----------|
+| `/sessions/user-metadata` | GET | Check if user has completed onboarding | — | `{ has_user_info, email?, first_name?, last_name? }` |
+| `/sessions/user-metadata` | POST | Store user onboarding data | `{ email, first_name, last_name }` | `UserMetadataResponse` |
+| `/sessions/chats` | GET | List all Knowledge Spaces | — | `{ session_id, total, chats[] }` |
+| `/sessions/feedback` | POST | Submit user feedback | `{ type, content }` | `{ message, feedback_id }` |
+
+---
+
+#### Messaging APIs (Polling Architecture)
+
+| Endpoint | Method | Purpose | Request Body | Response |
+|----------|--------|---------|--------------|----------|
+| `/sessions/messages` | POST | Initiate message processing | `MessageRequest` | `{ chat_id, status: "processing" }` |
+| `/sessions/messages/status` | POST | Poll for processing status | `{ chat_id }` | `MessageStatusResponse` |
+| `/sessions/chat/edit` | POST | Edit existing query node | `{ chat_id, node_id, query }` | `EditChatResponse` |
+| `/sessions/chat/delete` | POST | Delete entire chat | `{ chat_id }` | — |
+| `/sessions/chat/delete/node` | POST | Delete node + descendants | `{ chat_id, node_id }` | `DeleteNodeResponse` |
+
+---
+
+#### Graph & Analytics APIs
+
+| Endpoint | Method | Purpose | Request Body | Response |
+|----------|--------|---------|--------------|----------|
+| `/sessions/graph` | POST | Fetch complete conversation graph | `{ chat_id }` | `GraphResponse` |
+| `/sessions/history` | POST | Get linear conversation history | `{ chat_id }` | `HistoryResponse` |
+| `/sessions/bibliography` | POST | Get aggregated sources | `{ chat_id }` | `BibliographyResponse` |
+| `/sessions/trevi-brief` | POST | Generate AI summary for node | `{ chat_id, node_id }` | `TreviBriefResponse` |
+
+---
+
+### Polling-Based Messaging System
+
+**Why Polling vs SSE?**
+- Simpler backend implementation
+- Better reliability across network conditions
+- Easier debugging and monitoring
+- No keeping connections open for minutes
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                     POLLING MESSAGE FLOW                                  │
+└──────────────────────────────────────────────────────────────────────────┘
+
+  CLIENT                                                    SERVER
+    │                                                          │
+    │  ──────────────────────────────────────────────────────▶ │
+    │     POST /messages                                       │
+    │     { message, mode, chat_id, parent_node_id }           │
+    │                                                          │
+    │  ◀────────────────────────────────────────────────────── │
+    │     { chat_id: "abc-123", status: "processing" }         │
+    │                                                          │
+    │          ┌──────────────────────────────────────┐        │
+    │          │   POLLING LOOP (every 4 seconds)     │        │
+    │          │   Max 60 attempts = 4 minute timeout │        │
+    │          └──────────────────────────────────────┘        │
+    │                                                          │
+    │  ──────────────────────────────────────────────────────▶ │
+    │     POST /messages/status { chat_id: "abc-123" }         │
+    │  ◀────────────────────────────────────────────────────── │
+    │     { status: "processing", chat_id }                    │
+    │          │                                               │
+    │          ▼  onUpdate callback → show loading indicator   │
+    │                                                          │
+    │  ──────────────────────────────────────────────────────▶ │
+    │     POST /messages/status { chat_id: "abc-123" }         │
+    │  ◀────────────────────────────────────────────────────── │
+    │     { status: "processing", chat_id }                    │
+    │          │                                               │
+    │          ▼  ... repeat every 4s ...                      │
+    │                                                          │
+    │  ──────────────────────────────────────────────────────▶ │
+    │     POST /messages/status { chat_id: "abc-123" }         │
+    │  ◀────────────────────────────────────────────────────── │
+    │     {                                                    │
+    │       status: "complete",                                │
+    │       chat_id, node_id, parent_node_id,                  │
+    │       payload[], label, summary, citations[],            │
+    │       direction_nodes[], references[], graph_data        │
+    │     }                                                    │
+    │          │                                               │
+    │          ▼  onComplete callback → update UI with data    │
+    │                                                          │
+    └──────────────────────────────────────────────────────────┘
+```
+
+**Status Response States:**
+
+| Status | Description | Frontend Action |
+|--------|-------------|-----------------|
+| `processing` | Backend still processing | Show loading, continue polling |
+| `complete` | Response ready | Parse data, update graph, stop polling |
+| `error` | Processing failed | Show error message, stop polling |
+
+---
+
+### Modular Request Builders
+
+Trevi uses factory functions to construct message requests for different interaction modes:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        REQUEST BUILDER PATTERN                          │
+└────────────────────────────────────────────────────────────────────────┘
+
+   User Action              Builder Function           Request Generated
+   ───────────              ────────────────           ─────────────────
+   
+   ┌──────────────┐      ┌──────────────────────┐      ┌─────────────────┐
+   │ New Question │  ──▶ │ createNewChatRequest │ ──▶  │ mode: "query"   │
+   │              │      │ ("What is AI?")      │      │ chat_id: null   │
+   └──────────────┘      └──────────────────────┘      │ parent: null    │
+                                                        │ message: "..."  │
+                                                        └─────────────────┘
+   
+   ┌──────────────┐      ┌──────────────────────┐      ┌─────────────────┐
+   │ Follow-up    │  ──▶ │ createFollowUpRequest│ ──▶  │ mode: "query"   │
+   │ Message      │      │ ("Tell me more",     │      │ chat_id: "x"    │
+   └──────────────┘      │  "chat-1", "node-2") │      │ parent: "node-2"│
+                         └──────────────────────┘      │ message: "..."  │
+                                                        └─────────────────┘
+   
+   ┌──────────────┐      ┌────────────────────────┐    ┌──────────────────┐
+   │ Click        │  ──▶ │createDirectedQueryReq │ ──▶ │mode: "directed_ │
+   │ Direction    │      │("chat-1","direction-3")│    │       query"    │
+   │ Node         │      └────────────────────────┘    │ chat_id: "x"    │
+   └──────────────┘                                     │ parent: "dir-3" │
+                                                        │ message: ""     │
+                                                        └──────────────────┘
+   
+   ┌──────────────┐      ┌──────────────────────┐      ┌─────────────────┐
+   │ Edit Prev    │  ──▶ │ createEditRequest    │ ──▶  │ mode: "edit"    │
+   │ Query        │      │ ("New question",     │      │ chat_id: "x"    │
+   └──────────────┘      │  "chat-1", "node-2") │      │ parent: "node-2"│
+                         └──────────────────────┘      │ message: "..."  │
+                                                        └─────────────────┘
+```
+
+---
+
+### Data Types & Interfaces
+
+#### Core Message Types
+
+```typescript
+// Message modes
+type MessageMode = "query" | "directed_query" | "edit";
+
+// Request payload
+interface MessageRequest {
+  message: string;
+  parent_node_id?: string | null;
+  mode?: MessageMode;
+  chat_id?: string | null;
+}
+
+// Polling responses
+interface MessageInitResponse {
+  chat_id: string;
+  status: "processing";
+}
+
+interface MessageStatusResponse {
+  chat_id: string;
+  status: "processing" | "complete" | "error";
+  error?: string;
+  // When complete:
+  session_id?: string;
+  node_id?: string;
+  parent_node_id?: string;
+  payload?: MessagePayload[];
+  label?: string;
+  summary?: string;
+  references?: string[];
+  citations?: Citation[];
+  direction_nodes?: DirectionNode[];
+}
+```
+
+#### Graph Types
+
+```typescript
+interface GraphNodeData {
+  id: string;
+  type: "root" | "conversation" | "direction";
+  node_label: string;
+  display_summary?: string;
+  payload?: MessagePayload[];
+  references?: string[];
+  citations?: Citation[];
+  timestamp?: string;
+  editable?: boolean;
+  is_topic_label?: boolean;
+}
+
+interface GraphEdgeData {
+  source: string;
+  target: string;
+}
+
+interface GraphResponse {
+  session_id: string;
+  chat_id: string;
+  graph: {
+    nodes: GraphNodeData[];
+    edges: GraphEdgeData[];
+  };
+  current_node: string;
+}
+```
+
+#### Citation System
+
+```typescript
+interface CitationOccurrence {
+  position: number;
+  context: string;
+  snippet: string;
+}
+
+interface Citation {
+  index: number;
+  url: string;
+  title: string;
+  occurrences: CitationOccurrence[];
+}
+```
+
+---
+
+### Complete User Journey: Message Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    END-TO-END MESSAGE LIFECYCLE                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ USER INPUT                  FRONTEND                        BACKEND
+     │                          │                               │
+     │  Types "What is AI?"     │                               │
+     │  ──────────────────────▶ │                               │
+     │                          │                               │
+     │                          │   createNewChatRequest()      │
+     │                          │   ────────────────────────▶   │
+     │                          │                               │
+     │                          │   POST /messages              │
+     │                          │   ────────────────────────▶   │
+     │                          │                               │ Start
+     │                          │   { chat_id, "processing" }   │ processing
+     │                          │   ◀────────────────────────   │
+     │                          │                               │
+     │  Sees loading spinner    │   Poll /messages/status       │
+     │  ◀────────────────────── │   ────────────────────────▶   │
+     │                          │                               │
+     │                          │   { status: "processing" }    │
+     │                          │   ◀────────────────────────   │
+     │                          │                               │
+     │                          │   ... (repeat 4s intervals)   │
+     │                          │                               │
+     │                          │   { status: "complete",       │
+     │                          │     node_id, payload,         │
+     │                          │     citations, directions }   │
+     │                          │   ◀────────────────────────   │
+     │                          │                               │
+     │                          │   Update local graph state    │
+     │                          │   Trigger layout animation    │
+     │                          │                               │
+     │  Sees response +         │                               │
+     │  direction nodes         │                               │
+     │  ◀────────────────────── │                               │
+     │                          │                               │
+     │  Clicks direction node   │                               │
+     │  ──────────────────────▶ │                               │
+     │                          │  createDirectedQueryRequest() │
+     │                          │  ─────────────────────────▶   │
+     │                          │                               │
+     │                          │  (Same polling cycle...)      │
+     │                          │                               │
+```
+
+---
+
+### Error Handling Strategy
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                         ERROR HANDLING FLOW                            │
+└────────────────────────────────────────────────────────────────────────┘
+
+                           ┌─────────────────────────┐
+                           │    API Request          │
+                           └───────────┬─────────────┘
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │                  │                  │
+                    ▼                  ▼                  ▼
+            ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+            │ HTTP Error    │  │ Status Error  │  │ Timeout       │
+            │ (4xx, 5xx)    │  │ (in response) │  │ (60 polls)    │
+            └───────┬───────┘  └───────┬───────┘  └───────┬───────┘
+                    │                  │                  │
+                    ▼                  ▼                  ▼
+            ┌─────────────────────────────────────────────────────┐
+            │                 onError Callback                     │
+            │   { error: "descriptive error message" }             │
+            └───────────────────────────┬─────────────────────────┘
+                                        │
+                                        ▼
+            ┌─────────────────────────────────────────────────────┐
+            │              UI Error Handling                       │
+            │   • Display error toast/message                      │
+            │   • Reset loading state                              │
+            │   • Allow retry                                       │
+            └─────────────────────────────────────────────────────┘
+```
+
+---
+
+### Configuration
+
+**Base URL & Credentials**
+
+```typescript
+// All requests proxied through Next.js for same-origin cookies
+export const API_BASE_URL = "/api";
+
+const defaultOptions: RequestInit = {
+  credentials: "include",  // Session cookies
+  headers: {
+    "Content-Type": "application/json",
+  },
+};
+```
+
+**Polling Configuration**
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `POLL_INTERVAL` | 4000ms | Time between status checks |
+| `MAX_POLLS` | 60 | Maximum attempts before timeout |
+| **Total Timeout** | 4 minutes | Maximum wait for response |
+
+---
+
+### Implementation Location
+
+All API functions, types, and request builders are defined in:
+
+```
+lib/api.ts
+├── Types (24-191)
+│   ├── Session: Chat, ChatsResponse, UserMetadata*
+│   ├── Messaging: MessageRequest, MessageMode, *Event types
+│   ├── Graph: GraphNodeData, GraphEdgeData, GraphResponse
+│   └── Features: Citation, Bibliography, TreviBrief, Feedback
+│
+├── Session APIs (196-265)
+│   ├── getUserMetadata()
+│   ├── setUserMetadata()
+│   └── getChats()
+│
+├── Graph APIs (266-341)
+│   ├── getGraph()
+│   └── buildGraphNodesFromResponse()
+│
+├── Request Builders (343-417)
+│   ├── createNewChatRequest()
+│   ├── createFollowUpRequest()
+│   ├── createDirectedQueryRequest()
+│   └── createEditRequest()
+│
+├── Messaging APIs (419-665)
+│   ├── sendMessage() (polling implementation)
+│   ├── deleteChat()
+│   ├── getHistory()
+│   ├── deleteNode()
+│   └── editChatResponse()
+│
+├── Feature APIs (667-846)
+│   ├── getBibliography()
+│   ├── submitFeedback()
+│   └── fetchTreviBrief()
+│
+└── Utilities (696-732)
+    └── formatRelativeTime()
+```
+
+---
+
 *Document generated for portfolio and stakeholder presentation purposes.*

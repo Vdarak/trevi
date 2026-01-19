@@ -134,6 +134,29 @@ export type SSEEvent =
   | { type: "complete"; data: CompleteEvent }
   | { type: "error"; data: ErrorEvent };
 
+/** Response from POST /messages (new async polling API) */
+export interface MessageInitResponse {
+  chat_id: string;
+  status: "processing";
+}
+
+/** Response from POST /messages/status */
+export interface MessageStatusResponse {
+  chat_id: string;
+  status: "processing" | "complete" | "error";
+  error?: string;
+  // When complete, includes full CompleteEvent fields
+  session_id?: string;
+  node_id?: string;
+  parent_node_id?: string;
+  payload?: MessagePayload[];
+  label?: string;
+  summary?: string;
+  references?: string[];
+  citations?: Citation[];
+  direction_nodes?: DirectionNode[];
+}
+
 /** Bibliography response from /sessions/bibliography */
 export interface BibliographyResponse {
   chat_id: string;
@@ -394,12 +417,14 @@ export function createEditRequest(
 }
 
 /**
- * Sends a message and streams SSE responses.
+ * Send a message and poll for completion.
+ * Replaces old SSE-based streaming with async polling approach.
  * 
  * @param request - Message request payload
- * @param onUpdate - Callback for update events (processing status)
+ * @param onUpdate - Callback for status updates (called during polling)
  * @param onComplete - Callback for complete event (final response)
  * @param onError - Callback for error events
+ * @param options - Optional abort signal
  * 
  * @example
  * await sendMessage(
@@ -416,7 +441,8 @@ export async function sendMessage(
   onError?: (event: ErrorEvent) => void,
   options?: { signal?: AbortSignal }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/sessions/messages`, {
+  // Step 1: Initiate message processing
+  const initResponse = await fetch(`${API_BASE_URL}/api/sessions/messages`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -424,96 +450,85 @@ export async function sendMessage(
     signal: options?.signal,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
+  if (!initResponse.ok) {
+    const errorText = await initResponse.text();
     onError?.({ error: errorText });
-    throw new Error(`Failed to send message: ${response.statusText}`);
+    throw new Error(`Failed to send message: ${initResponse.statusText}`);
   }
 
-  if (!response.body) {
-    throw new Error("Response body is empty");
-  }
+  const initData: MessageInitResponse = await initResponse.json();
+  const chatId = initData.chat_id;
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+  console.log("Message initiated, chat_id:", chatId, "polling for status...");
 
-  const processEvent = (eventType: string, data: string) => {
-    try {
-      const parsed = JSON.parse(data);
-      console.log(`SSE Event [${eventType}]:`, parsed);
+  // Step 2: Poll for status every 4 seconds
+  const POLL_INTERVAL = 4000;
+  const MAX_POLLS = 60; // Max 4 minutes (60 * 4s)
+  let pollCount = 0;
 
-      switch (eventType) {
-        case "update":
-          onUpdate?.(parsed as UpdateEvent);
-          break;
-        case "complete":
-          onComplete?.(parsed as CompleteEvent);
-          break;
-        case "error":
-          onError?.(parsed as ErrorEvent);
-          break;
-        default:
-          console.log(`Unknown SSE event type: ${eventType}`);
-      }
-    } catch (e) {
-      console.error("Failed to parse SSE data:", e, "Raw data:", data);
-    }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      console.log("SSE stream ended. Remaining buffer:", buffer);
-      break;
+  while (pollCount < MAX_POLLS) {
+    if (options?.signal?.aborted) {
+      throw new Error("Aborted");
     }
 
-    buffer += decoder.decode(value, { stream: true });
+    // Wait before polling
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+    pollCount++;
 
-    // Process complete SSE messages (separated by double newlines)
-    const messages = buffer.split("\n\n");
-    buffer = messages.pop() || ""; // Keep incomplete message in buffer
+    console.log(`Polling status attempt ${pollCount}/${MAX_POLLS}...`);
 
-    for (const message of messages) {
-      if (!message.trim()) continue;
+    const statusResponse = await fetch(`${API_BASE_URL}/api/sessions/messages/status`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId }),
+      signal: options?.signal,
+    });
 
-      let eventType = "";
-      let eventData = "";
-
-      const lines = message.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventType = line.slice(6).trim();
-        } else if (line.startsWith("data:")) {
-          eventData = line.slice(5).trim();
-        }
-      }
-
-      if (eventType && eventData) {
-        processEvent(eventType, eventData);
-      }
-    }
-  }
-
-  // Process any remaining data in buffer after stream ends
-  if (buffer.trim()) {
-    console.log("Processing remaining buffer after stream end:", buffer);
-    let eventType = "";
-    let eventData = "";
-
-    const lines = buffer.split("\n");
-    for (const line of lines) {
-      if (line.startsWith("event:")) {
-        eventType = line.slice(6).trim();
-      } else if (line.startsWith("data:")) {
-        eventData = line.slice(5).trim();
-      }
+    if (!statusResponse.ok) {
+      const errorText = await statusResponse.text();
+      onError?.({ error: errorText });
+      throw new Error(`Failed to get status: ${statusResponse.statusText}`);
     }
 
-    if (eventType && eventData) {
-      processEvent(eventType, eventData);
+    const statusData: MessageStatusResponse = await statusResponse.json();
+    console.log("Status response:", statusData.status);
+
+    if (statusData.status === "processing") {
+      // Still processing, fire update callback and continue polling
+      onUpdate?.({ node: "", message: "Processing your query..." });
+      continue;
+    }
+
+    if (statusData.status === "error") {
+      onError?.({ error: statusData.error || "Unknown error" });
+      throw new Error(statusData.error || "Processing failed");
+    }
+
+    if (statusData.status === "complete") {
+      // Convert to CompleteEvent format
+      const completeEvent: CompleteEvent = {
+        session_id: statusData.session_id!,
+        chat_id: statusData.chat_id,
+        node_id: statusData.node_id!,
+        parent_node_id: statusData.parent_node_id!,
+        payload: statusData.payload!,
+        label: statusData.label!,
+        summary: statusData.summary!,
+        references: statusData.references!,
+        citations: statusData.citations!,
+        direction_nodes: statusData.direction_nodes!,
+      };
+      console.log("Message complete:", completeEvent);
+      onComplete?.(completeEvent);
+      return;
     }
   }
+
+  // Timeout after max polls
+  const timeoutError = "Request timed out after 4 minutes";
+  onError?.({ error: timeoutError });
+  throw new Error(timeoutError);
 }
 
 // ============================================================================
