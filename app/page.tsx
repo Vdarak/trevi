@@ -165,8 +165,8 @@ export default function Home() {
           setProcessingQuery(null);
           setIsLoading(false);
           setIsCreatingChat(false);
-          // Auto-open sidebar when new chat is created
-          setIsChatSidebarOpen(true);
+          setIsLoading(false);
+          setIsCreatingChat(false);
 
           // Remove pending chat now that real chat exists
           setPendingChats([]);
@@ -622,7 +622,10 @@ export default function Home() {
             <GraphLoading
               query={processingQuery || undefined}
               isFinished={!isCreatingChat && isLoadingTransition}
-              onTransitionComplete={() => setIsLoadingTransition(false)}
+              onTransitionComplete={() => {
+                setIsLoadingTransition(false);
+                setIsChatSidebarOpen(true); // Open sidebar only after transition completes
+              }}
             />
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, X, GitBranch, Layers, ArrowDown, ArrowRight, ThumbsUp, ThumbsDown, ChevronRight } from 'lucide-react';
+import { Compass, X, GitBranch, Layers, ArrowDown, ArrowRight, ThumbsUp, ThumbsDown, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 
@@ -145,32 +145,144 @@ export const PRO_TIPS = [
 ];
 
 // ============================================================================
-// Typewriter Text Component
+// Typewriter Transition Component (Handles Delete -> Type Sequence)
 // ============================================================================
 
-function TypewriterText({ text, className }: { text: string, className?: string }) {
-    const [displayedText, setDisplayedText] = useState("");
+interface TypewriterTransitionProps {
+    initialText: string;
+    finalText?: string;
+    startTransition: boolean;
+    className?: string; // Base classes
+    initialClassName?: string; // Classes for initial text (e.g. text-blue-600)
+    finalClassName?: string; // Classes for final text (e.g. text-green-600)
+    children?: React.ReactNode; // Optional children (like LoadingDots) to append to initialText
+    onTypingComplete?: () => void;
+    onInitialTypingComplete?: () => void;
+}
 
+function TypewriterTransition({
+    initialText,
+    finalText,
+    startTransition,
+    className,
+    initialClassName,
+    finalClassName,
+    children,
+    onTypingComplete,
+    onInitialTypingComplete
+}: TypewriterTransitionProps) {
+    // Phases: INIT_TYPING -> WAIT -> DELETING -> TYPING_FINAL -> DONE
+    const [phase, setPhase] = useState<'INIT_TYPING' | 'WAIT' | 'DELETING' | 'TYPING_FINAL' | 'DONE'>('INIT_TYPING');
+    const [charIndex, setCharIndex] = useState(0);
+
+    // Initial Typing Effect (Type in initialText)
     useEffect(() => {
-        let index = 0;
-        setDisplayedText(""); // Reset when text changes
+        setCharIndex(0);
+        setPhase('INIT_TYPING');
 
         const timer = setInterval(() => {
-            if (index < text.length) {
-                setDisplayedText((prev) => prev + text.charAt(index));
-                index++;
-            } else {
-                clearInterval(timer);
-            }
-        }, 40); // 40ms per char speed
+            setCharIndex(prev => {
+                if (prev < initialText.length) {
+                    return prev + 1;
+                } else {
+                    clearInterval(timer);
+                    setPhase('WAIT');
+                    return prev;
+                }
+            });
+        }, 30); // Fast initial typing
 
         return () => clearInterval(timer);
-    }, [text]);
+    }, [initialText]);
+
+    // Handle initial typing completion
+    useEffect(() => {
+        if (phase === 'WAIT' && onInitialTypingComplete) {
+            onInitialTypingComplete();
+        }
+    }, [phase, onInitialTypingComplete]);
+
+    // Handle Transition Trigger
+    useEffect(() => {
+        if (startTransition && phase === 'WAIT' && finalText) {
+            setPhase('DELETING');
+        }
+    }, [startTransition, phase, finalText]);
+
+    // Deleting Effect
+    useEffect(() => {
+        if (phase !== 'DELETING') return;
+
+        const timer = setInterval(() => {
+            setCharIndex(prev => {
+                if (prev > 0) {
+                    return prev - 1;
+                } else {
+                    clearInterval(timer);
+                    // Introduce small pause before typing new text
+                    setTimeout(() => {
+                        setPhase('TYPING_FINAL');
+                        setCharIndex(0); // Reset for new text
+                    }, 300);
+                    return 0;
+                }
+            });
+        }, 20); // Fast deletion
+
+        return () => clearInterval(timer);
+    }, [phase]);
+
+    // Final Typing Effect
+    useEffect(() => {
+        if (phase !== 'TYPING_FINAL' || !finalText) return;
+
+        const timer = setInterval(() => {
+            setCharIndex(prev => {
+                if (prev < finalText.length) {
+                    return prev + 1;
+                } else {
+                    clearInterval(timer);
+                    setPhase('DONE');
+                    return prev;
+                }
+            });
+        }, 40); // Normal typing speed
+
+        return () => clearInterval(timer);
+    }, [phase, finalText]);
+
+    // Handle final typing completion
+    useEffect(() => {
+        if (phase === 'DONE' && onTypingComplete) {
+            onTypingComplete();
+        }
+    }, [phase, onTypingComplete]);
+
+    // Compute displayed text based on phase and index
+    const getDisplayedText = () => {
+        if (phase === 'INIT_TYPING' || phase === 'WAIT' || phase === 'DELETING') {
+            return initialText.slice(0, charIndex);
+        } else if ((phase === 'TYPING_FINAL' || phase === 'DONE') && finalText) {
+            return finalText.slice(0, charIndex);
+        }
+        return "";
+    };
+
+    const isCursorVisible = phase === 'INIT_TYPING' || phase === 'DELETING' || phase === 'TYPING_FINAL';
+    const isWaiting = phase === 'WAIT';
+
+    // Determine active class based on phase (for color sync)
+    const activeClass = (phase === 'TYPING_FINAL' || phase === 'DONE')
+        ? finalClassName
+        : initialClassName;
 
     return (
-        <span className={className}>
-            {displayedText}
-            {displayedText.length < text.length && (
+        <span className={cn(className, activeClass)}>
+            {getDisplayedText()}
+            {/* Show children (LoadingDots) only if we are in initial phases and text is full */}
+            {isWaiting && children}
+            {/* Cursor */}
+            {isCursorVisible && (
                 <span className="inline-block w-[2px] h-[1em] bg-blue-500 animate-pulse ml-0.5 align-middle" />
             )}
         </span>
@@ -185,17 +297,17 @@ function LoadingDots() {
     return (
         <span className="inline-flex items-center ml-1">
             <motion.span
-                className="w-1 h-1 bg-slate-400 rounded-full mx-0.5"
+                className="w-1 h-1 bg-blue-400 rounded-full mx-0.5" // Updated to blue to match requested style
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
             />
             <motion.span
-                className="w-1 h-1 bg-slate-400 rounded-full mx-0.5"
+                className="w-1 h-1 bg-blue-400 rounded-full mx-0.5"
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: 0.2 }}
             />
             <motion.span
-                className="w-1 h-1 bg-slate-400 rounded-full mx-0.5"
+                className="w-1 h-1 bg-blue-400 rounded-full mx-0.5"
                 animate={{ opacity: [0.3, 1, 0.3] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}
             />
@@ -260,8 +372,8 @@ function ExplainerStep({ keyword, description, isActive, isExplained, canHover }
                     isActive || isExplained
                         // Root node styling (active/explained)
                         ? "bg-slate-900 text-white border-2 border-slate-900 shadow-md"
-                        // Conversation node styling (unexplained)
-                        : "bg-white text-slate-500 border border-slate-200 shadow-sm"
+                        // Conversation node styling (unexplained) - Stabilized with border-2 to prevent layout jump
+                        : "bg-white text-slate-500 border-2 border-slate-200 shadow-sm"
                 )}
             >
                 {keyword}
@@ -304,7 +416,6 @@ function Explainer({ activeStep, isCondensed }: ExplainerProps) {
         <div className="flex flex-col items-center w-full">
             {/* About Trevi title pill */}
             <motion.span
-                layout
                 className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full mb-6"
             >
                 About Trevi
@@ -353,24 +464,29 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
     const [stepIndex, setStepIndex] = useState(0);
     const [hasStarted, setHasStarted] = useState(false);
 
-    // UI states for exit sequence
-    const [showTips, setShowTips] = useState(true);
-    const [showExplainer, setShowExplainer] = useState(true);
-    const [isSuccessState, setIsSuccessState] = useState(false);
+    // Typing state tracking for coordinated start
+    const [headerTyped, setHeaderTyped] = useState(false);
+    const [queryTyped, setQueryTyped] = useState(false);
 
-    // Persist query to prevent flicker when parent clears it on success
+    // Green check success state
+    const [showSuccessCheck, setShowSuccessCheck] = useState(false);
+
+    // Persist query to prevent flicker
     const [keptQuery, setKeptQuery] = useState(query);
     useEffect(() => {
         if (query) setKeptQuery(query);
     }, [query]);
 
-    // Initial delay: "brief delay, once the user has read what it is exploring"
+    // Initial Start Logic: Wait for BOTH typing animations to complete
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setHasStarted(true);
-        }, 1500);
-        return () => clearTimeout(timer);
-    }, []);
+        if (headerTyped && queryTyped && !hasStarted) {
+            // "Appear briefly after typing has finished"
+            const timer = setTimeout(() => {
+                setHasStarted(true);
+            }, 600);
+            return () => clearTimeout(timer);
+        }
+    }, [headerTyped, queryTyped, hasStarted]);
 
     // Phase/Step progression
     useEffect(() => {
@@ -379,7 +495,7 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
         let interval: NodeJS.Timeout;
 
         if (phase === 1) {
-            // Phase 1: 3s per step (enough time for keyword + staggered tooltip)
+            // Phase 1: 3s per step
             interval = setInterval(() => {
                 setStepIndex(prev => {
                     if (prev < EXPLAINER_STEPS.length - 1) {
@@ -400,92 +516,132 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
         return () => clearInterval(interval);
     }, [phase, manualPhase, hasStarted, isFinished]);
 
-    // Handle Finish/Success Sequence
+    // ============================================================================
+    // Exit Animation Orchestration
+    // ============================================================================
+
+    // States for sequence: TIPS -> EXPLAINER -> TEXT -> CHECK -> COMPLETED
+    const [exitStep, setExitStep] = useState<'LOADING' | 'FADE_TIPS' | 'FADE_EXPLAINER' | 'TRANSITION_TEXT' | 'SHOW_CHECK' | 'COMPLETED'>('LOADING');
+
+    // Trigger exact sequence when isFinished becomes true
     useEffect(() => {
-        if (isFinished) {
-            setIsSuccessState(true);
+        if (isFinished && exitStep === 'LOADING') {
+            setExitStep('FADE_TIPS');
+        }
+    }, [isFinished, exitStep]);
 
-            // Sequence:
-            // 0ms: Text changes (handled by render)
-            // 0ms: Start fading out tips (Phase 2) if visible
-            setShowTips(false);
+    // Step 1: Fade Tips (Immediate) -> Wait 500ms
+    useEffect(() => {
+        if (exitStep === 'FADE_TIPS') {
+            const timer = setTimeout(() => {
+                setExitStep('FADE_EXPLAINER');
+            }, 500); // 500ms after tips start fading
+            return () => clearTimeout(timer);
+        }
+    }, [exitStep]);
 
-            // 800ms: Fade out Explainer (Phase 1)
-            const t1 = setTimeout(() => {
-                setShowExplainer(false);
-            }, 800);
+    // Step 2: Fade Explainer -> Wait 600ms
+    useEffect(() => {
+        if (exitStep === 'FADE_EXPLAINER') {
+            const timer = setTimeout(() => {
+                setExitStep('TRANSITION_TEXT');
+            }, 800); // 800ms wait for fade out
+            return () => clearTimeout(timer);
+        }
+    }, [exitStep]);
 
-            // 1800ms: Complete transition (guides user to canvas)
-            const t2 = setTimeout(() => {
+    // Step 3: Transition Text -> Handled by TypewriterTransition internally.
+    const handleTypingComplete = () => {
+        if (exitStep === 'TRANSITION_TEXT') {
+            // Trigger Green Check Animation
+            setExitStep('SHOW_CHECK');
+            setShowSuccessCheck(true);
+
+            // Wait for check animation to play out (2s for nice view)
+            setTimeout(() => {
+                setExitStep('COMPLETED');
                 if (onTransitionComplete) onTransitionComplete();
             }, 2000);
-
-            return () => {
-                clearTimeout(t1);
-                clearTimeout(t2);
-            };
         }
-    }, [isFinished, onTransitionComplete]);
+    };
 
+    // Derived visibility flags
     const currentPhase = manualPhase ?? phase;
     const currentStepIndex = manualStepIndex ?? stepIndex;
 
-    // Derived visual states helpers
+    const showTips = exitStep === 'LOADING'; // Hide immediately on FADE_TIPS
+    const showExplainer = exitStep === 'LOADING' || exitStep === 'FADE_TIPS'; // Hide on FADE_EXPLAINER
+    const showTextTransition = exitStep === 'TRANSITION_TEXT' || exitStep === 'SHOW_CHECK'; // Keep text while check shows
+
+    // UI Logic
     const showingPhase1 = hasStarted && currentPhase === 1 && showExplainer;
     const showingPhase2 = hasStarted && currentPhase === 2 && showTips;
-    const showingCondensedPhase1 = hasStarted && currentPhase === 2 && showExplainer; // Explainer condensed at top in Phase 2
+    const showingCondensedPhase1 = hasStarted && currentPhase === 2 && showExplainer;
 
     return (
         <div className="flex flex-col items-center justify-center w-full h-full min-h-[500px] bg-white relative overflow-hidden px-4 py-8">
             {/* Background radial gradient */}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-50/50 via-transparent to-transparent opacity-60" />
 
-            {/* Header section: Logo LEFT, Text RIGHT */}
+            {/* Header section */}
             <div className="relative z-10 flex flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10 w-full max-w-3xl mx-auto mb-6">
 
-                {/* Trevi Logo Animation */}
-                <div className="flex-shrink-0">
-                    {/* Mobile: 80px */}
-                    <div className="sm:hidden">
-                        <TreviLogoAnimation size={80} />
-                    </div>
-                    {/* Tablet: 100px */}
-                    <div className="hidden sm:block md:hidden">
-                        <TreviLogoAnimation size={100} />
-                    </div>
-                    {/* Desktop: 140px */}
-                    <div className="hidden md:block">
-                        <TreviLogoAnimation size={140} />
-                    </div>
+                {/* Animated Logo / Check Swap */}
+                <div className="flex-shrink-0 relative w-[80px] h-[80px] sm:w-[100px] sm:h-[100px] md:w-[140px] md:h-[140px] flex items-center justify-center">
+                    <AnimatePresence mode="wait">
+                        {!showSuccessCheck ? (
+                            <motion.div
+                                key="logo"
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                transition={{ duration: 0.5, ease: "easeInOut" }}
+                                className="absolute inset-0 flex items-center justify-center"
+                            >
+                                <div className="sm:hidden transform scale-100"><TreviLogoAnimation size={80} /></div>
+                                <div className="hidden sm:block md:hidden transform scale-100"><TreviLogoAnimation size={100} /></div>
+                                <div className="hidden md:block transform scale-100"><TreviLogoAnimation size={140} /></div>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="check"
+                                initial={{ scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                transition={{ duration: 0.6, type: "spring", bounce: 0.5 }}
+                                className="absolute inset-0 flex items-center justify-center"
+                            >
+                                <CheckCircle2 className="w-full h-full text-green-500" strokeWidth={1.5} />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Text stacked vertically */}
                 <div className="flex flex-col items-start text-left gap-0.5 min-w-[200px]">
                     <div className="h-6 flex items-center">
-                        <p className={cn(
-                            "text-xs sm:text-sm md:text-base font-medium flex items-center transition-colors duration-500",
-                            isSuccessState ? "text-green-600" : "text-slate-500"
-                        )}>
-                            {isSuccessState ? (
-                                <TypewriterText text="Trevi has finished exploring" className="font-semibold" />
-                            ) : (
-                                <>
-                                    Trevi is exploring your curiosity
-                                    <LoadingDots />
-                                </>
-                            )}
-                        </p>
+                        <TypewriterTransition
+                            initialText="Trevi is exploring your curiosity"
+                            finalText="Trevi has finished exploring"
+                            initialClassName="text-blue-600"
+                            finalClassName="text-green-600 font-semibold"
+                            className="text-xs sm:text-sm md:text-base font-medium flex items-center transition-colors duration-500" // Base classes
+                            startTransition={showTextTransition && !showSuccessCheck} // Pause/stop transition if check is showing? Actually keep final text
+                            onInitialTypingComplete={() => setHeaderTyped(true)}
+                            onTypingComplete={handleTypingComplete}
+                        >
+                            <LoadingDots />
+                        </TypewriterTransition>
                     </div>
                     <div className="min-h-[1.5em] flex items-center">
-                        {isSuccessState ? (
-                            <p className="text-sm sm:text-base md:text-xl font-bold text-slate-900">
-                                <TypewriterText text="Your topic tree is ready!" />
-                            </p>
-                        ) : keptQuery ? (
-                            <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
-                                "{keptQuery}"
-                            </p>
-                        ) : null}
+                        <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
+                            <TypewriterTransition
+                                initialText={keptQuery ? `"${keptQuery}"` : ""}
+                                startTransition={false} // Never transition away
+                                className="text-slate-800"
+                                onInitialTypingComplete={() => setQueryTyped(true)}
+                            />
+                        </p>
                     </div>
                 </div>
             </div>
@@ -497,10 +653,10 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                        transition={{ duration: 0.6 }}
+                        transition={{ duration: 0.6 }} // Match 800ms wait with slightly faster animation
                         className="relative z-10 w-full max-w-2xl mx-auto"
                     >
-                        {/* Top Separator - Only show if tips haven't started (Phase 1) or condensed */}
+                        {/* Top Separator */}
                         <div className="w-full h-px bg-slate-200 mb-8" />
 
                         <div className="pb-12">
@@ -523,7 +679,7 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.5 }}
+                        transition={{ duration: 0.5 }} // Match 500ms wait
                         className="relative z-10 w-full max-w-xl mx-auto"
                     >
                         <AnimatePresence mode="wait">
