@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical } from 'lucide-react';
+import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import { StatusLine } from '@/components/ui/status-line';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
-import { getBibliography } from '@/lib/api';
-import type { MessagePayload, Citation, BibliographyResponse } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { TreviBriefCard } from '@/components/chat/trevi-brief-card';
+import { getBibliography, fetchTreviBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
 
 interface ConversationNode {
     id: string;
@@ -32,6 +34,9 @@ interface ChatSidebarProps {
     onSendMessage: (message: string) => void;
     onEditMessage?: (nodeId: string, newMessage: string) => void;
     onClose: () => void;
+    // Brief cache for sharing data between sidebar and modal
+    briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
+    onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
 }
 
 const tabs = [
@@ -57,8 +62,11 @@ export function ChatSidebar({
     onSendMessage,
     onEditMessage,
     onClose,
+    briefCache,
+    onBriefCacheUpdate,
 }: ChatSidebarProps) {
     const [inputValue, setInputValue] = useState('');
+    const [showBrief, setShowBrief] = useState(false);
     const [activeTab, setActiveTab] = useState<TabType>('thread');
     const [width, setWidth] = useState(MIN_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
@@ -66,6 +74,21 @@ export function ChatSidebar({
     const [shouldRender, setShouldRender] = useState(false);
     const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
     const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
+
+    // Trevi Brief states - initialize from cache if available
+    const cachedBrief = activeNodeId && briefCache?.get(activeNodeId);
+    const [briefData, setBriefData] = useState<TreviBriefResponse['trevi_brief'] | null>(cachedBrief || null);
+    const [isBriefLoading, setIsBriefLoading] = useState(false);
+    const briefConnectionRef = useRef<AbortController | null>(null);
+
+    // Update briefData when activeNodeId changes and cache has data
+    React.useEffect(() => {
+        if (activeNodeId && briefCache?.has(activeNodeId)) {
+            setBriefData(briefCache.get(activeNodeId) || null);
+        } else {
+            setBriefData(null); // Reset when switching to a node without cached brief
+        }
+    }, [activeNodeId, briefCache]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +147,13 @@ export function ChatSidebar({
 
     // Title based on active tab
     const currentTitle = activeTab === 'thread' && activeLabel ? activeLabel : rootLabel;
+
+    // Check if active node is a root node (first node = root, no brief history)
+    const isRootNode = useMemo(() => {
+        if (!activeNodeId) return true;
+        // Root is the first node in the conversation
+        return conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
+    }, [activeNodeId, conversationNodes]);
 
     // Auto-scroll to active node or top (but NOT when streaming - let bottom scroll take over)
     useEffect(() => {
@@ -215,7 +245,7 @@ export function ChatSidebar({
                     className={`
                         hidden md:flex
                         absolute left-0 top-0 bottom-0 w-1 
-                        cursor-col-resize group z-10
+                        cursor-col-resize group z-50
                         items-center justify-center
                         hover:bg-blue-500/10
                         ${isResizing ? 'bg-blue-500/20' : ''}
@@ -285,203 +315,321 @@ export function ChatSidebar({
 
                     {/* Context Title */}
                     {activeTab !== 'bibliography' && (
-                        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100">
-                            <p className="text-sm font-semibold text-slate-700 truncate">{currentTitle}</p>
+                        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-700 truncate flex-1">{currentTitle}</p>
+
+                            {/* Trevi Brief Toggle - hidden for root nodes */}
+                            {!isRootNode && (
+                                <button
+                                    onClick={() => {
+                                        const newState = !showBrief;
+
+                                        // If opening brief for the first time and no data, fetch it
+                                        if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
+                                            setIsBriefLoading(true);
+
+                                            // Create AbortController for cleanup
+                                            const controller = new AbortController();
+                                            briefConnectionRef.current = controller;
+
+                                            fetchTreviBrief(
+                                                chatId,
+                                                activeNodeId,
+                                                undefined, // No progressive updates for now
+                                                (response) => {
+                                                    setBriefData(response.trevi_brief);
+                                                    setIsBriefLoading(false);
+                                                    // Update parent cache
+                                                    onBriefCacheUpdate?.(activeNodeId, response.trevi_brief);
+                                                },
+                                                (error) => {
+                                                    console.error('Trevi Brief error:', error);
+                                                    setIsBriefLoading(false);
+                                                },
+                                                { signal: controller.signal }
+                                            ).catch((err) => {
+                                                // Handle abort or other errors
+                                                if (err.name !== 'AbortError') {
+                                                    console.error('Trevi Brief fetch failed:', err);
+                                                    setIsBriefLoading(false);
+                                                }
+                                            });
+                                        }
+
+                                        setShowBrief(newState);
+                                        if (newState) {
+                                            // Auto-resize to MAXIMUM allowed width when opening brief
+                                            const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
+                                            setWidth(maxWidth);
+                                        } else {
+                                            // Optional: Shrink back? User requested: "when trevi brief is closed, automatically resize the chat side bar to minimum width"
+                                            setWidth(MIN_WIDTH);
+                                        }
+                                    }}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
+                                        isBriefLoading
+                                            ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                            : briefData
+                                                ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
+                                                : showBrief
+                                                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                    : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                    )}
+                                    title={isBriefLoading ? "Generating..." : briefData ? "Brief Generated" : showBrief ? "Close Brief" : "View Trevi Brief"}
+                                >
+                                    {isBriefLoading ? (
+                                        <motion.span
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                            className="flex items-center justify-center"
+                                        >
+                                            <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
+                                        </motion.span>
+                                    ) : briefData ? (
+                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    ) : (
+                                        <motion.span
+                                            animate={{ rotate: showBrief ? 45 : 0 }}
+                                            transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                                            className="flex items-center justify-center font-bold"
+                                        >
+                                            <Sparkle
+                                                className={cn(
+                                                    "w-3.5 h-3.5 transition-colors duration-200",
+                                                    showBrief ? "fill-blue-600" : "fill-blue-500"
+                                                )}
+                                            />
+                                        </motion.span>
+                                    )}
+                                    <span>Brief</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </header>
 
                 {/* Content Area */}
-                <main
-                    ref={messagesContainerRef}
-                    className="flex-1 overflow-y-auto overscroll-contain bg-white"
-                    style={{ WebkitOverflowScrolling: 'touch' }}
-                >
-                    <div className="px-4 py-4 space-y-4">
-                        {activeTab === 'bibliography' ? (
-                            isLoadingBibliography ? (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                    <Loader2 className="w-8 h-8 mb-3 animate-spin text-blue-500" />
-                                    <p className="text-sm font-medium">Loading bibliography...</p>
-                                </div>
-                            ) : bibliography && Object.keys(bibliography.reference_usage).length > 0 ? (
-                                <div className="space-y-6">
-                                    {/* Helper to find citation details across all nodes */}
-                                    {(() => {
-                                        // Collect all unique citations keyed by URL
-                                        const urlToCitation = new Map<string, Citation>();
+                <main className="flex-1 overflow-hidden flex flex-col relative bg-white">
 
-                                        // Also map indices to URLs if needed, but primary key is URL from API
-                                        [...conversationNodes, ...threadNodes].forEach(node => {
-                                            node.citations?.forEach(c => {
-                                                if (c.url) urlToCitation.set(c.url, c);
-                                            });
-                                        });
+                    {/* Trevi Brief Section (Shifts content down) */}
+                    <AnimatePresence>
+                        {showBrief && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                className="flex-shrink-0 w-full min-w-0 overflow-hidden z-10 bg-slate-50/50 shadow-sm relative border-b border-blue-100"
+                            >
+                                <TreviBriefCard
+                                    nodeLabel={currentTitle || "Thread Summary"}
+                                    onClose={() => {
+                                        setShowBrief(false);
+                                        setWidth(MIN_WIDTH); // Auto-shrink on close
+                                    }}
+                                    className="border-none"
+                                    isLoading={isBriefLoading}
+                                    briefData={briefData}
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
-                                        return Object.entries(bibliography.reference_usage).map(([url, labels], idx) => {
-                                            const citation = urlToCitation.get(url);
+                    {/* Chat Layer */}
+                    <div className="flex-1 min-h-0 relative">
+                        <div
+                            ref={messagesContainerRef}
+                            className="absolute inset-0 overflow-y-auto overscroll-contain"
+                            style={{ WebkitOverflowScrolling: 'touch' }}
+                        >
+                            <div className="px-4 py-4 space-y-4">
+                                {activeTab === 'bibliography' ? (
+                                    isLoadingBibliography ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                            <Loader2 className="w-8 h-8 mb-3 animate-spin text-blue-500" />
+                                            <p className="text-sm font-medium">Loading bibliography...</p>
+                                        </div>
+                                    ) : bibliography && Object.keys(bibliography.reference_usage).length > 0 ? (
+                                        <div className="space-y-6">
+                                            {/* Helper to find citation details across all nodes */}
+                                            {(() => {
+                                                // Collect all unique citations keyed by URL
+                                                const urlToCitation = new Map<string, Citation>();
 
-                                            // The key is the URL itself
-                                            const displayUrl = url;
+                                                // Also map indices to URLs if needed, but primary key is URL from API
+                                                [...conversationNodes, ...threadNodes].forEach(node => {
+                                                    node.citations?.forEach(c => {
+                                                        if (c.url) urlToCitation.set(c.url, c);
+                                                    });
+                                                });
 
-                                            // Try to get a nice title, otherwise use the URL or domain
-                                            let displayTitle = citation?.title;
-                                            if (!displayTitle) {
-                                                try {
-                                                    const urlObj = new URL(url);
-                                                    displayTitle = urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
-                                                } catch (e) {
-                                                    displayTitle = url;
-                                                }
-                                            }
+                                                return Object.entries(bibliography.reference_usage).map(([url, labels], idx) => {
+                                                    const citation = urlToCitation.get(url);
 
-                                            // Filter out "No meaningful topic identified"
-                                            const validLabels = labels.filter(label =>
-                                                label !== "General"
-                                            );
+                                                    // The key is the URL itself
+                                                    const displayUrl = url;
 
-                                            // Use simple sequential numbering
-                                            const displayIndex = idx + 1;
+                                                    // Try to get a nice title, otherwise use the URL or domain
+                                                    let displayTitle = citation?.title;
+                                                    if (!displayTitle) {
+                                                        try {
+                                                            const urlObj = new URL(url);
+                                                            displayTitle = urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
+                                                        } catch (e) {
+                                                            displayTitle = url;
+                                                        }
+                                                    }
 
-                                            return (
-                                                <div key={url} className="group relative pl-0 sm:pl-0">
-                                                    <div className="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100/60 hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-200">
-                                                        {/* Index Badge */}
-                                                        <div className="flex-shrink-0">
-                                                            <div className="
-                                                                flex items-center justify-center 
-                                                                w-6 h-6 rounded-md 
-                                                                bg-white border border-slate-200 
-                                                                text-xs font-mono font-medium text-slate-500
-                                                                group-hover:border-blue-200 group-hover:text-blue-600
-                                                                transition-colors
-                                                            ">
-                                                                {displayIndex}
-                                                            </div>
-                                                        </div>
+                                                    // Filter out "No meaningful topic identified"
+                                                    const validLabels = labels.filter(label =>
+                                                        label !== "General"
+                                                    );
 
-                                                        {/* Content */}
-                                                        <div className="flex-1 min-w-0 space-y-2">
-                                                            {/* Title & Link */}
-                                                            <div>
-                                                                <a
-                                                                    href={url}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="group/link block"
-                                                                >
-                                                                    <h4 className="text-sm font-semibold text-slate-800 leading-snug group-hover/link:text-blue-600 transition-colors line-clamp-2">
-                                                                        {displayTitle}
-                                                                    </h4>
-                                                                    <div className="text-xs text-slate-400 font-mono mt-1 w-full truncate opacity-70 group-hover/link:opacity-100 transition-all">
-                                                                        {displayUrl}
+                                                    // Use simple sequential numbering
+                                                    const displayIndex = idx + 1;
+
+                                                    return (
+                                                        <div key={url} className="group relative pl-0 sm:pl-0">
+                                                            <div className="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100/60 hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-200">
+                                                                {/* Index Badge */}
+                                                                <div className="flex-shrink-0">
+                                                                    <div className="
+                                                                        flex items-center justify-center 
+                                                                        w-6 h-6 rounded-md 
+                                                                        bg-white border border-slate-200 
+                                                                        text-xs font-mono font-medium text-slate-500
+                                                                        group-hover:border-blue-200 group-hover:text-blue-600
+                                                                        transition-colors
+                                                                    ">
+                                                                        {displayIndex}
                                                                     </div>
-                                                                </a>
-                                                            </div>
-
-                                                            {/* Usage Labels */}
-                                                            {validLabels.length > 0 && (
-                                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                                    {validLabels.map((label, labelIdx) => (
-                                                                        <span
-                                                                            key={`${url}-${labelIdx}`}
-                                                                            className="
-                                                                                inline-flex items-center px-2 py-0.5 
-                                                                                rounded-md text-[10px] uppercase tracking-wider font-semibold 
-                                                                                bg-white border border-slate-200 text-slate-500
-                                                                            "
-                                                                        >
-                                                                            {label}
-                                                                        </span>
-                                                                    ))}
                                                                 </div>
-                                                            )}
+
+                                                                {/* Content */}
+                                                                <div className="flex-1 min-w-0 space-y-2">
+                                                                    {/* Title & Link */}
+                                                                    <div>
+                                                                        <a
+                                                                            href={url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="group/link block"
+                                                                        >
+                                                                            <h4 className="text-sm font-semibold text-slate-800 leading-snug group-hover/link:text-blue-600 transition-colors line-clamp-2">
+                                                                                {displayTitle}
+                                                                            </h4>
+                                                                            <div className="text-xs text-slate-400 font-mono mt-1 w-full truncate opacity-70 group-hover/link:opacity-100 transition-all">
+                                                                                {displayUrl}
+                                                                            </div>
+                                                                        </a>
+                                                                    </div>
+
+                                                                    {/* Usage Labels */}
+                                                                    {validLabels.length > 0 && (
+                                                                        <div className="flex flex-wrap gap-2 pt-1">
+                                                                            {validLabels.map((label, labelIdx) => (
+                                                                                <span
+                                                                                    key={`${url}-${labelIdx}`}
+                                                                                    className="
+                                                                                        inline-flex items-center px-2 py-0.5 
+                                                                                        rounded-md text-[10px] uppercase tracking-wider font-semibold 
+                                                                                        bg-white border border-slate-200 text-slate-500
+                                                                                    "
+                                                                                >
+                                                                                    {label}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                    <BookOpen className="w-10 h-10 mb-3 opacity-40" />
-                                    <p className="text-sm font-medium">No sources found</p>
-                                    <p className="text-xs mt-1 opacity-70">Bibliography is empty</p>
-                                </div>
-                            )
-                        ) : currentNodes.length === 0 && !isStreaming ? (
-                            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
-                                <p className="text-sm font-medium">
-                                    {activeTab === 'thread' ? 'No thread selected' : 'No messages yet'}
-                                </p>
-                                <p className="text-xs mt-1 opacity-70">
-                                    {activeTab === 'thread' ? 'Click a node to see its path' : 'Start exploring to see messages'}
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                {currentNodes.map((node, idx) => (
-                                    <section
-                                        key={node.id}
-                                        ref={(el: HTMLDivElement | null) => { if (el) nodeRefs.current.set(node.id, el); }}
-                                        data-node-id={node.id}
-                                        className={idx > 0 ? 'pt-4 border-t border-slate-100' : ''}
-                                    >
-                                        {/* Node Label Badge */}
-                                        {currentNodes.length > 1 && (
-                                            <div className={`
-                                                inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 
-                                                rounded-full text-xs font-medium
-                                                ${node.id === activeNodeId
-                                                    ? 'bg-blue-100 text-blue-700'
-                                                    : 'bg-slate-100 text-slate-500'}
-                                            `}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${node.id === activeNodeId ? 'bg-blue-500' : 'bg-slate-400'}`} />
-                                                {node.label}
-                                            </div>
-                                        )}
-
-                                        {/* Messages */}
-                                        <div className="space-y-4">
-                                            {(node.payload || []).map((msg, msgIdx) => (
-                                                <MessageBubble
-                                                    key={`${node.id}-${msgIdx}`}
-                                                    role={msg.role}
-                                                    content={msg.content}
-                                                    citations={node.citations}
-                                                    onEdit={msg.role === 'user' && !isStreaming ? (text) => onEditMessage?.(node.id, text) : undefined}
-                                                />
-                                            ))}
+                                                    );
+                                                });
+                                            })()}
                                         </div>
-                                    </section>
-                                ))}
-
-                                {/* Optimistic User Message & Streaming Indicator */}
-                                {isStreaming && (
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                            <BookOpen className="w-10 h-10 mb-3 opacity-40" />
+                                            <p className="text-sm font-medium">No sources found</p>
+                                            <p className="text-xs mt-1 opacity-70">Bibliography is empty</p>
+                                        </div>
+                                    )
+                                ) : currentNodes.length === 0 && !isStreaming ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                        <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
+                                        <p className="text-sm font-medium">
+                                            {activeTab === 'thread' ? 'No thread selected' : 'No messages yet'}
+                                        </p>
+                                        <p className="text-xs mt-1 opacity-70">
+                                            {activeTab === 'thread' ? 'Click a node to see its path' : 'Start exploring to see messages'}
+                                        </p>
+                                    </div>
+                                ) : (
                                     <>
-                                        {/* Show user message immediately */}
-                                        <div className="pt-4 border-t border-slate-100 animate-fade-in">
-                                            <MessageBubble
-                                                role="user"
-                                                content={streamUserMessage || statusMessage || ""}
-                                            />
-                                        </div>
+                                        {currentNodes.map((node, idx) => (
+                                            <section
+                                                key={node.id}
+                                                ref={(el: HTMLDivElement | null) => { if (el) nodeRefs.current.set(node.id, el); }}
+                                                data-node-id={node.id}
+                                                className={idx > 0 ? 'pt-4 border-t border-slate-100' : ''}
+                                            >
+                                                {/* Node Label Badge */}
+                                                {currentNodes.length > 1 && (
+                                                    <div className={`
+                                                        inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 
+                                                        rounded-full text-xs font-medium
+                                                        ${node.id === activeNodeId
+                                                            ? 'bg-blue-100 text-blue-700'
+                                                            : 'bg-slate-100 text-slate-500'}
+                                                    `}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${node.id === activeNodeId ? 'bg-blue-500' : 'bg-slate-400'}`} />
+                                                        {node.label}
+                                                    </div>
+                                                )}
 
-                                        {/* Status Line */}
-                                        <div className="py-2 animate-fade-in">
-                                            <StatusLine
-                                                status="exploring"
-                                                title="Exploring"
-                                                subtitle={statusMessage || "Processing..."}
-                                            />
-                                        </div>
+                                                {/* Messages */}
+                                                <div className="space-y-4">
+                                                    {(node.payload || []).map((msg, msgIdx) => (
+                                                        <MessageBubble
+                                                            key={`${node.id}-${msgIdx}`}
+                                                            role={msg.role}
+                                                            content={msg.content}
+                                                            citations={node.citations}
+                                                            onEdit={msg.role === 'user' && !isStreaming ? (text) => onEditMessage?.(node.id, text) : undefined}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        ))}
+
+                                        {/* Optimistic User Message & Streaming Indicator */}
+                                        {isStreaming && (
+                                            <>
+                                                {/* Show user message immediately */}
+                                                <div className="pt-4 border-t border-slate-100 animate-fade-in">
+                                                    <MessageBubble
+                                                        role="user"
+                                                        content={streamUserMessage || statusMessage || ""}
+                                                    />
+                                                </div>
+
+                                                {/* Status Line */}
+                                                <div className="py-2 animate-fade-in">
+                                                    <StatusLine
+                                                        status="exploring"
+                                                        title="Exploring"
+                                                        subtitle={statusMessage || "Processing..."}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
                                     </>
                                 )}
-                            </>
-                        )}
-                        <div ref={messagesEndRef} />
+                                <div ref={messagesEndRef} />
+                            </div>
+                        </div>
                     </div>
                 </main>
 

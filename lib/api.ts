@@ -156,6 +156,17 @@ export interface UserMetadataRequest {
   last_name: string;
 }
 
+/** Trevi Brief response from POST /sessions/trevi-brief */
+export interface TreviBriefResponse {
+  chat_id: string;
+  node_id: string;
+  trevi_brief: {
+    tldr: string;
+    node_summaries: Record<string, string>; // Node label -> Summary text
+    key_topics: string[];
+  };
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -171,7 +182,7 @@ export interface UserMetadataRequest {
  * if (!has_user_info) redirect('/welcome');
  */
 export async function getUserMetadata(): Promise<UserMetadataResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/user-metadata`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/user-metadata`, {
     ...defaultOptions,
     method: "GET",
     credentials: "include",
@@ -195,7 +206,7 @@ export async function getUserMetadata(): Promise<UserMetadataResponse> {
  * await setUserMetadata({ email: "user@example.com", first_name: "Jane", last_name: "Doe" });
  */
 export async function setUserMetadata(data: UserMetadataRequest): Promise<UserMetadataResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/user-metadata`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/user-metadata`, {
     ...defaultOptions,
     method: "POST",
     credentials: "include",
@@ -217,7 +228,7 @@ export async function setUserMetadata(data: UserMetadataRequest): Promise<UserMe
  * const { chats, session_id } = await getChats();
  */
 export async function getChats(): Promise<ChatsResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/chats`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chats`, {
     ...defaultOptions,
     method: "GET",
     credentials: "include",
@@ -240,7 +251,7 @@ export async function getChats(): Promise<ChatsResponse> {
  * const { graph, current_node } = await getGraph("chat-uuid-xyz");
  */
 export async function getGraph(chatId: string): Promise<GraphResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/graph`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/graph`, {
     ...defaultOptions,
     method: "POST",
     credentials: "include",
@@ -346,7 +357,7 @@ export function createFollowUpRequest(
 }
 
 /**
- * Follows a direction node (suggested topic).
+ * Follows a direction(explore) node (suggested topic).
  * 
  * @example
  * const request = createDirectedQueryRequest("chat-123", "direction-node-id");
@@ -405,7 +416,7 @@ export async function sendMessage(
   onError?: (event: ErrorEvent) => void,
   options?: { signal?: AbortSignal }
 ): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sessions/messages`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/messages`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -518,7 +529,7 @@ export async function sendMessage(
  * await deleteChat("chat-uuid-xyz");
  */
 export async function deleteChat(chatId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/sessions/chat/delete`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/delete`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -548,7 +559,7 @@ export interface HistoryResponse {
  * const { history, path } = await getHistory("chat-uuid-xyz");
  */
 export async function getHistory(chatId: string): Promise<HistoryResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/history`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/history`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -583,7 +594,7 @@ export interface DeleteNodeResponse {
  * const result = await deleteNode("chat-123", "node-456");
  */
 export async function deleteNode(chatId: string, nodeId: string): Promise<DeleteNodeResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/chat/delete/node`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/delete/node`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -620,7 +631,7 @@ export async function editChatResponse(
   nodeId: string,
   newQuery: string
 ): Promise<EditChatResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/chat/edit`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/edit`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -651,7 +662,7 @@ export interface BibliographyResponse {
  * @returns Bibliography data mapping references to node usage
  */
 export async function getBibliography(chatId: string): Promise<BibliographyResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/bibliography`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/bibliography`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -743,7 +754,7 @@ export async function submitFeedback(
   type: FeedbackType,
   content: Record<string, unknown>
 ): Promise<FeedbackResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/feedback`, {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/feedback`, {
     ...defaultOptions,
     method: "POST",
     credentials: "include",
@@ -755,4 +766,66 @@ export async function submitFeedback(
   }
 
   return response.json();
+}
+
+// ============================================================================
+// Trevi Brief API
+// ============================================================================
+
+/**
+ * Fetches the Trevi Brief for a specific node in a chat.
+ * Uses SSE streaming (same pattern as sendMessage) for 40-second keepalive.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID to generate brief for
+ * @param onUpdate - Optional callback for progressive updates during generation
+ * @param onComplete - Callback when brief is fully generated
+ * @param onError - Callback for error events
+ * @param options - Additional options like abort signal
+ * 
+ * @example
+ * await fetchTreviBrief(
+ *   "chat-123",
+ *   "node-456",
+ *   undefined, // No progressive updates
+ *   (response) => setBriefData(response.trevi_brief),
+ *   (error) => console.error(error)
+ * );
+ */
+export async function fetchTreviBrief(
+  chatId: string,
+  nodeId: string,
+  onUpdate?: (data: Partial<TreviBriefResponse['trevi_brief']>) => void,
+  onComplete?: (response: TreviBriefResponse) => void,
+  onError?: (error: { error: string }) => void,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sessions/trevi-brief`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, node_id: nodeId }),
+      signal: options?.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      onError?.({ error: errorText });
+      throw new Error(`Failed to fetch Trevi Brief: ${response.statusText}`);
+    }
+
+    // Parse JSON response directly (not SSE)
+    const data: TreviBriefResponse = await response.json();
+    console.log('Trevi Brief response:', data);
+
+    // Call completion callback
+    onComplete?.(data);
+  } catch (error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
+      console.error('Trevi Brief fetch error:', error);
+      onError?.({ error: error.message });
+    }
+    throw error;
+  }
 }

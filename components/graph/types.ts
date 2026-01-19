@@ -1,5 +1,5 @@
 import { Node, Edge } from '@xyflow/react';
-import { MessagePayload, Citation } from '@/lib/api';
+import { MessagePayload, Citation, TreviBriefResponse } from '@/lib/api';
 
 // ============================================================================
 // Core Types
@@ -17,21 +17,24 @@ export interface GraphNode {
 
 export interface KnowledgeGraphProps {
     nodes: GraphNode[];
-    rootNodeId?: string; // Primary root for single-root backward compatibility
-    rootNodeIds?: string[]; // Multiple roots for multi-graph support
+    rootNodeId?: string;
+    rootNodeIds?: string[];
     onNodeClick?: (nodeId: string) => void;
-    onDirectionClick?: (nodeId: string) => void; // Callback for clicking direction nodes
-    onDeleteNode?: (nodeId: string) => Promise<void>; // Callback for deleting a node and its descendants
-    loadingNodeIds?: Set<string> | string[] | null; // Node IDs currently being loaded
-    onToggleChatSidebar?: () => void; // Toggle full conversation sidebar
-    isChatSidebarOpen?: boolean; // Whether the chat sidebar is open
-    initialActiveNodeId?: string | null; // Active node to highlight on initial load
-    onNodeMessage?: (nodeId: string, message: string) => void; // Callback for sending message from node panel
-    isNodeStreaming?: boolean; // Whether a node panel is currently streaming
-    nodeStatusMessage?: string; // Status message for node panel streaming
-    nodeStreamUserMessage?: string; // Optimistic user data (bubble content)
-    // Global status indicator
+    onDirectionClick?: (nodeId: string) => void;
+    onDeleteNode?: (nodeId: string) => Promise<void>;
+    loadingNodeIds?: Set<string> | string[] | null;
+    onToggleChatSidebar?: () => void;
+    isChatSidebarOpen?: boolean;
+    initialActiveNodeId?: string | null;
+    onNodeMessage?: (nodeId: string, message: string) => void;
+    isNodeStreaming?: boolean;
+    nodeStatusMessage?: string;
+    nodeStreamUserMessage?: string;
     globalStatus?: GlobalStatus;
+    // Brief cache for sharing between sidebar and modal
+    chatId?: string;
+    briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
+    onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
 }
 
 export interface GlobalStatus {

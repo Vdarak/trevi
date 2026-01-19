@@ -18,6 +18,7 @@ import {
   buildGraphNodesFromResponse,
   deleteNode,
   type CompleteEvent,
+  type TreviBriefResponse,
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
 
@@ -36,6 +37,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingTransition, setIsLoadingTransition] = useState(false); // Visual transition state
+  const [isError, setIsError] = useState(false); // Error state for loading screen
+  const [errorMessage, setErrorMessage] = useState<string>(""); // Error message to display
   // Multi-connection state for parallel explorations
   const connectionManagerRef = useRef(new ConnectionManager());
   const [loadingNodeIds, setLoadingNodeIds] = useState<Set<string>>(new Set());
@@ -72,6 +75,9 @@ export default function Home() {
 
   // Pending chats for optimistic UI (SWR pattern)
   const [pendingChats, setPendingChats] = useState<Array<{ id: string, name: string, isLoading: boolean }>>([]);
+
+  // Brief cache: nodeId -> brief data (shared between sidebar and modal)
+  const [briefCache, setBriefCache] = useState<Map<string, TreviBriefResponse['trevi_brief']>>(new Map());
 
   // Get all conversation nodes for full sidebar (nodes with payloads, in order)
   const conversationNodes = useMemo(() => {
@@ -182,12 +188,14 @@ export default function Home() {
       );
     } catch (error) {
       console.error("Failed to send message:", error);
-      setStatusMessage("Failed to send message");
+      setErrorMessage("Trevi encountered an error — it's not your fault");
+      setIsError(true);
       setIsLoading(false);
       setIsCreatingChat(false);
       setIsStreaming(false);
       setProcessingQuery(null);
       setPendingChats([]); // Clear pending on error
+      // Note: isLoadingTransition stays true to show error screen
     }
   }, [rootNodeId]);
 
@@ -244,7 +252,9 @@ export default function Home() {
       );
     } catch (error) {
       console.error("Failed to send follow-up:", error);
-      setStatusMessage("Failed to send message");
+      setErrorMessage("Trevi encountered an error — it's not your fault");
+      setIsError(true);
+      setIsLoading(false);
       setIsStreaming(false);
       setProcessingQuery(null);
       setIsNodeStreaming(false);
@@ -280,6 +290,8 @@ export default function Home() {
       setStatusMessage("Failed to edit message");
       setIsStreaming(false);
       setProcessingQuery(null);
+      setIsError(true);
+      setErrorMessage("Failed to edit message");
     }
   }, [currentChatId, isStreaming]);
 
@@ -294,21 +306,29 @@ export default function Home() {
     if (isAnyLoading) {
       throw new Error("Cannot delete while exploring");
     }
+    setIsError(false); // Clear previous error
+    setErrorMessage("");
 
-    const response = await deleteNode(currentChatId, nodeId);
+    try {
+      const response = await deleteNode(currentChatId, nodeId);
 
-    // Update current node to what the API returns (parent of deleted node)
-    setCurrentNodeId(response.current_node);
+      // Update current node to what the API returns (parent of deleted node)
+      setCurrentNodeId(response.current_node);
 
-    // Update graph with the new data from API response
-    const graphResponse = {
-      session_id: response.session_id,
-      chat_id: response.chat_id,
-      graph: response.graph,
-      current_node: response.current_node,
-    };
-    const { nodes } = buildGraphNodesFromResponse(graphResponse);
-    setGraphNodes(nodes);
+      // Update graph with the new data from API response
+      const graphResponse = {
+        session_id: response.session_id,
+        chat_id: response.chat_id,
+        graph: response.graph,
+        current_node: response.current_node,
+      };
+      const { nodes } = buildGraphNodesFromResponse(graphResponse);
+      setGraphNodes(nodes);
+    } catch (error) {
+      console.error("Failed to delete node:", error);
+      setIsError(true);
+      setErrorMessage("Failed to delete node");
+    }
   }, [currentChatId, loadingNodeIds, isStreaming, isLoading]);
 
   // Handle selecting a chat from left sidebar
@@ -318,6 +338,8 @@ export default function Home() {
     setIsLoading(true);
     setStatusMessage("Loading conversation...");
     setCurrentChatId(chatId);
+    setIsError(false); // Clear previous error
+    setErrorMessage("");
 
     try {
       const graphResponse = await getGraph(chatId);
@@ -339,6 +361,8 @@ export default function Home() {
       setGraphNodes([]);
       setCurrentNodeId(null);
       setRootNodeId(null);
+      setIsError(true);
+      setErrorMessage("Failed to load conversation");
     } finally {
       setIsLoading(false);
     }
@@ -359,6 +383,8 @@ export default function Home() {
     setIsCreatingChat(false);
     setIsChatSidebarOpen(false);
     setIsStreaming(false);
+    setIsError(false); // Clear error state
+    setErrorMessage("");
   }, []);
 
   // Handle starting a new chat
@@ -395,6 +421,8 @@ export default function Home() {
     setIsNodeStreaming(true);
     // Auto-open sidebar when exploring a direction
     setIsChatSidebarOpen(true);
+    setIsError(false); // Clear previous error
+    setErrorMessage("");
 
     try {
       const request = createDirectedQueryRequest(currentChatId, nodeId);
@@ -423,6 +451,8 @@ export default function Home() {
               responsesRef.current = newResponses;
               setResponses(newResponses);
               setGraphNodes(buildGraphFromResponses(newResponses));
+              setIsError(true);
+              setErrorMessage("Failed to refresh graph after exploration");
             })
             .finally(() => {
               // Clear status if no more active connections
@@ -441,6 +471,8 @@ export default function Home() {
         (error) => {
           console.error("Direction query error:", error);
           connectionManagerRef.current.error(nodeId, error.error || 'Failed to explore');
+          setIsError(true);
+          setErrorMessage(`Error exploring: ${error.error}`);
 
           if (connectionManagerRef.current.getActiveCount() === 0) {
             setIsStreaming(false);
@@ -462,6 +494,8 @@ export default function Home() {
         console.error("Failed to explore direction:", error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to explore';
         connectionManagerRef.current.error(nodeId, errorMessage);
+        setIsError(true);
+        setErrorMessage(`Failed to explore: ${errorMessage}`);
       }
 
       if (connectionManagerRef.current.getActiveCount() === 0) {
@@ -490,6 +524,8 @@ export default function Home() {
     // Sync with sidebar streaming state
     setIsStreaming(true);
     setStatusMessage(message);
+    setIsError(false); // Clear previous error
+    setErrorMessage("");
 
     try {
       const request = createFollowUpRequest(message, currentChatId, nodeId);
@@ -526,6 +562,8 @@ export default function Home() {
           setProcessingQuery(null);
           setIsStreaming(false);
           setStatusMessage("");
+          setIsError(true);
+          setErrorMessage(`Error: ${error.error}`);
         }
       );
     } catch (error) {
@@ -535,6 +573,8 @@ export default function Home() {
       setProcessingQuery(null);
       setIsStreaming(false);
       setStatusMessage("");
+      setIsError(true);
+      setErrorMessage("Failed to send message");
     }
   }, [currentChatId, isNodeStreaming]);
 
@@ -549,6 +589,26 @@ export default function Home() {
   const toggleChatSidebar = useCallback(() => {
     setIsChatSidebarOpen(prev => !prev);
   }, []);
+
+  // Handle loading screen transition complete
+  const handleLoadingTransitionComplete = useCallback(() => {
+    setIsLoadingTransition(false);
+
+    if (isError) {
+      // On error: reset to home page
+      setIsError(false);
+      setErrorMessage("");
+      setCurrentChatId(null);
+      setCurrentNodeId(null);
+      setRootNodeId(null);
+      setGraphNodes([]);
+      setResponses([]);
+      responsesRef.current = [];
+    } else if (currentChatId) {
+      // On success: open sidebar
+      setIsChatSidebarOpen(true);
+    }
+  }, [currentChatId, isError]);
 
   // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
@@ -622,10 +682,9 @@ export default function Home() {
             <GraphLoading
               query={processingQuery || undefined}
               isFinished={!isCreatingChat && isLoadingTransition}
-              onTransitionComplete={() => {
-                setIsLoadingTransition(false);
-                setIsChatSidebarOpen(true); // Open sidebar only after transition completes
-              }}
+              isError={isError}
+              errorMessage={errorMessage}
+              onTransitionComplete={handleLoadingTransitionComplete}
             />
           ) : showGraphPage ? (
             // On mobile, show either graph or chat based on tab
@@ -644,6 +703,11 @@ export default function Home() {
                 isNodeStreaming={isNodeStreaming}
                 nodeStatusMessage={nodeStatusMessage}
                 nodeStreamUserMessage={nodeStreamingUserMessage}
+                chatId={currentChatId || undefined}
+                briefCache={briefCache}
+                onBriefCacheUpdate={(nodeId, data) => {
+                  setBriefCache(prev => new Map(prev).set(nodeId, data));
+                }}
                 globalStatus={{
                   isActive: isStreaming || isNodeStreaming || isLoading || loadingNodeIds.size > 0,
                   message: statusMessage || nodeStatusMessage,
@@ -687,6 +751,10 @@ export default function Home() {
             onSendMessage={handleSidebarMessage}
             onEditMessage={handleEditMessage}
             onClose={() => { setIsChatSidebarOpen(false); setMobileActiveTab('graph'); }}
+            briefCache={briefCache}
+            onBriefCacheUpdate={(nodeId, data) => {
+              setBriefCache(prev => new Map(prev).set(nodeId, data));
+            }}
           />
         </div>
       </main>

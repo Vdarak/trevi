@@ -59,7 +59,7 @@ const edgeTypes = {
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate }: KnowledgeGraphProps) {
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -1022,6 +1022,11 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           statusMessage={nodeStatusMessage}
           streamUserMessage={nodeStreamUserMessage}
           clickPosition={modalData.clickPosition}
+          chatId={chatId}
+          nodeId={modalData.nodeId}
+          isRootNode={graphNodes.find(n => n.id === modalData.nodeId)?.parentId === null}
+          briefCache={briefCache}
+          onBriefCacheUpdate={onBriefCacheUpdate}
         />
       )}
 

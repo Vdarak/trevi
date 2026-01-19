@@ -456,10 +456,12 @@ export interface LoadingTipsProps {
     manualPhase?: 1 | 2;
     manualStepIndex?: number;
     isFinished?: boolean;
+    isError?: boolean;
+    errorMessage?: string;
     onTransitionComplete?: () => void;
 }
 
-export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, onTransitionComplete }: LoadingTipsProps) {
+export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, isError, errorMessage, onTransitionComplete }: LoadingTipsProps) {
     const [phase, setPhase] = useState<1 | 2>(1);
     const [stepIndex, setStepIndex] = useState(0);
     const [hasStarted, setHasStarted] = useState(false);
@@ -468,8 +470,9 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
     const [headerTyped, setHeaderTyped] = useState(false);
     const [queryTyped, setQueryTyped] = useState(false);
 
-    // Green check success state
+    // Green check success state OR Red X error state
     const [showSuccessCheck, setShowSuccessCheck] = useState(false);
+    const [showErrorX, setShowErrorX] = useState(false);
 
     // Persist query to prevent flicker
     const [keptQuery, setKeptQuery] = useState(query);
@@ -520,15 +523,15 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
     // Exit Animation Orchestration
     // ============================================================================
 
-    // States for sequence: TIPS -> EXPLAINER -> TEXT -> CHECK -> COMPLETED
-    const [exitStep, setExitStep] = useState<'LOADING' | 'FADE_TIPS' | 'FADE_EXPLAINER' | 'TRANSITION_TEXT' | 'SHOW_CHECK' | 'COMPLETED'>('LOADING');
+    // States for sequence: TIPS -> EXPLAINER -> TEXT -> CHECK/ERROR -> COMPLETED
+    const [exitStep, setExitStep] = useState<'LOADING' | 'FADE_TIPS' | 'FADE_EXPLAINER' | 'TRANSITION_TEXT' | 'SHOW_CHECK' | 'SHOW_ERROR' | 'COMPLETED'>('LOADING');
 
-    // Trigger exact sequence when isFinished becomes true
+    // Trigger exact sequence when isFinished OR isError becomes true
     useEffect(() => {
-        if (isFinished && exitStep === 'LOADING') {
+        if ((isFinished || isError) && exitStep === 'LOADING') {
             setExitStep('FADE_TIPS');
         }
-    }, [isFinished, exitStep]);
+    }, [isFinished, isError, exitStep]);
 
     // Step 1: Fade Tips (Immediate) -> Wait 500ms
     useEffect(() => {
@@ -553,15 +556,27 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
     // Step 3: Transition Text -> Handled by TypewriterTransition internally.
     const handleTypingComplete = () => {
         if (exitStep === 'TRANSITION_TEXT') {
-            // Trigger Green Check Animation
-            setExitStep('SHOW_CHECK');
-            setShowSuccessCheck(true);
+            if (isError) {
+                // Trigger Red X Animation
+                setExitStep('SHOW_ERROR');
+                setShowErrorX(true);
 
-            // Wait for check animation to play out (2s for nice view)
-            setTimeout(() => {
-                setExitStep('COMPLETED');
-                if (onTransitionComplete) onTransitionComplete();
-            }, 2000);
+                // Wait 1.5s then revert to home
+                setTimeout(() => {
+                    setExitStep('COMPLETED');
+                    if (onTransitionComplete) onTransitionComplete();
+                }, 1500);
+            } else {
+                // Trigger Green Check Animation (success path)
+                setExitStep('SHOW_CHECK');
+                setShowSuccessCheck(true);
+
+                // Wait for check animation to play out (2s for nice view)
+                setTimeout(() => {
+                    setExitStep('COMPLETED');
+                    if (onTransitionComplete) onTransitionComplete();
+                }, 2000);
+            }
         }
     };
 
@@ -571,7 +586,7 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
 
     const showTips = exitStep === 'LOADING'; // Hide immediately on FADE_TIPS
     const showExplainer = exitStep === 'LOADING' || exitStep === 'FADE_TIPS'; // Hide on FADE_EXPLAINER
-    const showTextTransition = exitStep === 'TRANSITION_TEXT' || exitStep === 'SHOW_CHECK'; // Keep text while check shows
+    const showTextTransition = exitStep === 'TRANSITION_TEXT' || exitStep === 'SHOW_CHECK' || exitStep === 'SHOW_ERROR'; // Keep text while icon shows
 
     // UI Logic
     const showingPhase1 = hasStarted && currentPhase === 1 && showExplainer;
@@ -586,10 +601,10 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
             {/* Header section */}
             <div className="relative z-10 flex flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10 w-full max-w-3xl mx-auto mb-6">
 
-                {/* Animated Logo / Check Swap */}
+                {/* Animated Logo / Check / Error X Swap */}
                 <div className="flex-shrink-0 relative w-[80px] h-[80px] sm:w-[100px] sm:h-[100px] md:w-[140px] md:h-[140px] flex items-center justify-center">
                     <AnimatePresence mode="wait">
-                        {!showSuccessCheck ? (
+                        {!showSuccessCheck && !showErrorX ? (
                             <motion.div
                                 key="logo"
                                 initial={{ scale: 0.8, opacity: 0 }}
@@ -602,7 +617,7 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                                 <div className="hidden sm:block md:hidden transform scale-100"><TreviLogoAnimation size={100} /></div>
                                 <div className="hidden md:block transform scale-100"><TreviLogoAnimation size={140} /></div>
                             </motion.div>
-                        ) : (
+                        ) : showSuccessCheck ? (
                             <motion.div
                                 key="check"
                                 initial={{ scale: 0.5, opacity: 0 }}
@@ -613,6 +628,17 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                             >
                                 <CheckCircle2 className="w-full h-full text-green-500" strokeWidth={1.5} />
                             </motion.div>
+                        ) : (
+                            <motion.div
+                                key="error"
+                                initial={{ scale: 0.5, opacity: 0, rotate: 0 }}
+                                animate={{ scale: 1, opacity: 1, rotate: 90 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                transition={{ duration: 0.6, type: "spring", bounce: 0.4 }}
+                                className="absolute inset-0 flex items-center justify-center"
+                            >
+                                <X className="w-full h-full text-red-500 p-4" strokeWidth={2} />
+                            </motion.div>
                         )}
                     </AnimatePresence>
                 </div>
@@ -622,11 +648,11 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                     <div className="h-6 flex items-center">
                         <TypewriterTransition
                             initialText="Trevi is exploring your curiosity"
-                            finalText="Trevi has finished exploring"
+                            finalText={isError ? "Trevi encountered an error" : "Trevi has finished exploring"}
                             initialClassName="text-blue-600"
-                            finalClassName="text-green-600 font-semibold"
+                            finalClassName={isError ? "text-red-600 font-semibold" : "text-green-600 font-semibold"}
                             className="text-xs sm:text-sm md:text-base font-medium flex items-center transition-colors duration-500" // Base classes
-                            startTransition={showTextTransition && !showSuccessCheck} // Pause/stop transition if check is showing? Actually keep final text
+                            startTransition={showTextTransition && !showSuccessCheck && !showErrorX} // Pause/stop transition if icon is showing
                             onInitialTypingComplete={() => setHeaderTyped(true)}
                             onTypingComplete={handleTypingComplete}
                         >
@@ -634,14 +660,24 @@ export function LoadingTips({ query, manualPhase, manualStepIndex, isFinished, o
                         </TypewriterTransition>
                     </div>
                     <div className="min-h-[1.5em] flex items-center">
-                        <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
-                            <TypewriterTransition
-                                initialText={keptQuery ? `"${keptQuery}"` : ""}
-                                startTransition={false} // Never transition away
-                                className="text-slate-800"
-                                onInitialTypingComplete={() => setQueryTyped(true)}
-                            />
-                        </p>
+                        {isError && showErrorX ? (
+                            <motion.p
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="text-xs sm:text-sm md:text-base text-red-600 font-medium"
+                            >
+                                {errorMessage || "It's not your fault"}
+                            </motion.p>
+                        ) : (
+                            <p className="text-sm sm:text-base md:text-xl font-semibold text-slate-800 line-clamp-2 max-w-[200px] sm:max-w-sm md:max-w-md">
+                                <TypewriterTransition
+                                    initialText={keptQuery ? `"${keptQuery}"` : ""}
+                                    startTransition={false} // Never transition away
+                                    className="text-slate-800"
+                                    onInitialTypingComplete={() => setQueryTyped(true)}
+                                />
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
