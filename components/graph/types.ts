@@ -35,6 +35,8 @@ export interface KnowledgeGraphProps {
     chatId?: string;
     briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
     onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
+    // Skip layout animation (useful when switching between chats)
+    skipLayoutAnimation?: boolean;
 }
 
 export interface GlobalStatus {

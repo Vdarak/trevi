@@ -59,7 +59,7 @@ const edgeTypes = {
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate, skipLayoutAnimation }: KnowledgeGraphProps) {
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -85,6 +85,15 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [showPeriodicFeedback, setShowPeriodicFeedback] = useState(false);
   const periodicFeedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastFeedbackDismissRef = useRef<number>(0);
+
+  // Track previous chatId to detect chat switches (for skipping animation)
+  const prevChatIdRef = useRef<string | undefined>(chatId);
+  const isChatSwitching = chatId !== prevChatIdRef.current;
+
+  // Update prevChatIdRef after render
+  useEffect(() => {
+    prevChatIdRef.current = chatId;
+  }, [chatId]);
 
   // Start periodic feedback timer when graph has nodes
   useEffect(() => {
@@ -514,8 +523,10 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           isActiveNode: node.id === activeNodeId,
           onToggleCollapse: () => toggleCollapse(node.id),
           onDirectionClick: () => {
-            const isLoading = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
-            if (isLoading || globalStatus?.isActive) {
+            // loadingNodeIds is now chat-scoped (passed from page.tsx)
+            // Only block if THIS chat has active explorations
+            const isChatBusy = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
+            if (isChatBusy) {
               setStatusPillWarning("Trevi can only explore one topic at a time");
               setTimeout(() => setStatusPillWarning(undefined), 3000);
               return;
@@ -563,7 +574,8 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         hasInitialFitRef.current = true;
         fitView({ padding: 0.3, duration: 300 });
       }
-    }, [fitView, nodesWithHandlers.length])
+    }, [fitView, nodesWithHandlers.length]),
+    skipLayoutAnimation || isChatSwitching // Skip animation during chat switches
   );
 
   // Update nodes/edges when hovering to show path to root (layered on top of active path)
@@ -693,35 +705,18 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: Node) => {
-      // Check if we are already exploring/active
-      // If globalStatus.isActive is true, we deny exploring another node
-      if (globalStatus?.isActive && node.id !== globalStatus.activeNodeLabel) {
-        // Note: node.id is ID, activeNodeLabel is Label. This check is approximate.
-        // Better check: if we are loading OR if we are in 'exploring' state (which implies streaming/loading)
-        // Actually user said "currently a node is being explored".
+      // loadingNodeIds is now chat-scoped - only check if this chat is busy
+      const isChatBusy = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
 
-        // Let's use loadingNodeIds first as a hard check for "busy"
-        const isLoading = loadingNodeIds && (loadingNodeIds instanceof Set ? loadingNodeIds.size > 0 : loadingNodeIds.length > 0);
+      if (isChatBusy) {
+        // Only block direction nodes (which trigger exploration)
+        // Regular concept nodes should still be clickable to view content
+        const isDirectionNode = node.data?.isDirection;
 
-        if (isLoading || globalStatus.isActive) {
-          // Only block if we are clicking a direction node (which triggers explore) 
-          // OR if we want to block ANY node click that changes context?
-          // User said "if the user clicks on any other explore node".
-          // Direction nodes usually are the ones triggering exploration. 
-          // Concept nodes just open panels.
-          // Let's assume we block 'onNodeClick' which usually triggers exploration for direction nodes, or sets focus.
-
-          // But wait, clicking a normal node just opens the panel/modal. That should be allowed?
-          // User said "clicks on any other explore node". 'Explore node' implies 'Direction Node' or similar action-triggering node.
-
-          // Let's check node data.
-          const isDirectionNode = node.data?.isDirection;
-
-          if (isDirectionNode) {
-            setStatusPillWarning("Trevi can only explore one topic at a time");
-            setTimeout(() => setStatusPillWarning(undefined), 3000);
-            return;
-          }
+        if (isDirectionNode) {
+          setStatusPillWarning("Trevi can only explore one topic at a time");
+          setTimeout(() => setStatusPillWarning(undefined), 3000);
+          return;
         }
       }
 

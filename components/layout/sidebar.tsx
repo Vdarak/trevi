@@ -229,7 +229,7 @@ export function Sidebar({
               ) : chats.length === 0 && pendingChats.length === 0 ? (
                 <p className="px-4 text-sm text-slate-400">No Topic Trees yet</p>
               ) : (
-                chats.map((chat) => (
+                [...chats].reverse().map((chat) => (
                   <div
                     key={chat.chat_id}
                     className="relative group"
