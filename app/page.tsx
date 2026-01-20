@@ -11,7 +11,6 @@ import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   editChatResponse,
-  createNewChatRequest,
   createDirectedQueryRequest,
   createFollowUpRequest,
   getGraph,
@@ -21,12 +20,22 @@ import {
   type TreviBriefResponse,
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
+import { ChatStoreProvider, useChatStore } from '@/lib/chat-store';
+import type { BriefState } from '@/components/graph/types';
 
-export default function Home() {
+function HomeContent() {
+  // ChatStore for centralized state
+  const { startChatCreation, startBackgroundPolling, refreshChats } = useChatStore();
+
   // Chat state
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const currentChatIdRef = useRef<string | null>(null); // Stable ref for async callbacks
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [rootNodeId, setRootNodeId] = useState<string | null>(null);
+
+  // Track if user is still watching the loading screen (for background polling)
+  const isWatchingLoadingRef = useRef<boolean>(false);
+  const currentPendingTempIdRef = useRef<string | null>(null);
 
   // Graph state
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
@@ -46,15 +55,25 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [processingQuery, setProcessingQuery] = useState<string | null>(null);
 
-  // Subscribe to ConnectionManager changes
+  // Subscribe to ConnectionManager changes (chat-scoped)
   useEffect(() => {
     const manager = connectionManagerRef.current;
     const unsubscribe = manager.subscribe(() => {
-      setLoadingNodeIds(new Set(manager.getActiveNodeIds()));
+      // Only show loading nodes for the current chat
+      const chatId = currentChatIdRef.current;
+      setLoadingNodeIds(new Set(manager.getActiveNodeIds(chatId ?? undefined)));
       setConnectionErrors(manager.getRecentErrors());
     });
     return unsubscribe;
   }, []);
+
+  // Keep currentChatIdRef in sync with currentChatId state
+  useEffect(() => {
+    currentChatIdRef.current = currentChatId;
+    // Trigger a re-check of loading nodes when chat changes
+    const manager = connectionManagerRef.current;
+    setLoadingNodeIds(new Set(manager.getActiveNodeIds(currentChatId ?? undefined)));
+  }, [currentChatId]);
 
   // Chat sidebar state (full conversation)
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
@@ -73,11 +92,8 @@ export default function Home() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileActiveTab, setMobileActiveTab] = useState<'graph' | 'chat'>('graph');
 
-  // Pending chats for optimistic UI (SWR pattern)
-  const [pendingChats, setPendingChats] = useState<Array<{ id: string, name: string, isLoading: boolean }>>([]);
-
-  // Brief cache: nodeId -> brief data (shared between sidebar and modal)
-  const [briefCache, setBriefCache] = useState<Map<string, TreviBriefResponse['trevi_brief']>>(new Map());
+  // Brief cache: nodeId -> brief state (shared between sidebar and modal)
+  const [briefCache, setBriefCache] = useState<Map<string, BriefState>>(new Map());
 
   // Get all conversation nodes for full sidebar (nodes with payloads, in order)
   const conversationNodes = useMemo(() => {
@@ -123,39 +139,53 @@ export default function Home() {
 
   // Handle sending a message from the landing page (always creates a new chat)
   const handleSendMessage = useCallback(async (message: string) => {
+    // Mark that we're watching this loading screen
+    isWatchingLoadingRef.current = true;
+
     setIsLoading(true);
     setIsCreatingChat(true);
     setIsLoadingTransition(true);
     setStatusMessage(message);
-    setStreamingUserMessage(message); // Same for normal messages
+    setStreamingUserMessage(message);
     setProcessingQuery(message);
     setIsStreaming(true);
 
-    try {
-      const request = createNewChatRequest(message);
+    // Create pending chat in the store
+    const tempId = startChatCreation(message);
+    currentPendingTempIdRef.current = tempId;
 
-      // Add optimistic pending chat with query as name
-      const pendingId = `pending-${Date.now()}`;
-      setPendingChats(prev => [...prev, { id: pendingId, name: message.slice(0, 50) + (message.length > 50 ? '...' : ''), isLoading: true }]);
-
-      await sendMessage(
-        request,
-        (update) => {
-          setStatusMessage(update.message);
-        },
-        (event) => {
+    // Start background polling via ChatStore
+    startBackgroundPolling(
+      tempId,
+      message,
+      // onComplete callback
+      (event, wasWatching) => {
+        if (wasWatching) {
+          // User stayed on loading screen - update UI fully
           setCurrentChatId(event.chat_id);
+
+          // Initial set from event (optimistic/immediate)
           setCurrentNodeId(event.node_id);
+          setRootNodeId(event.node_id); // Always set for new chats
 
-          if (!rootNodeId) {
-            setRootNodeId(event.node_id);
-          }
-
-          // Fetch full graph to ensure sidebar has complete data
+          // Fetch full graph - wait for it before clearing loading states
           getGraph(event.chat_id)
             .then((graphResponse) => {
-              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              const { nodes, currentNodeId: graphCurrentNode, rootNodeId: graphRootNode } = buildGraphNodesFromResponse(graphResponse);
               setGraphNodes(nodes);
+
+              // Update IDs to match exactly what's in the graph response
+              // This is critical to ensure the sidebar can find the nodes
+              if (graphCurrentNode) setCurrentNodeId(graphCurrentNode);
+              if (graphRootNode) setRootNodeId(graphRootNode);
+
+              // Only clear loading states AFTER graph is loaded
+              setIsStreaming(false);
+              setStatusMessage("");
+              setStreamingUserMessage("");
+              setProcessingQuery(null);
+              setIsLoading(false);
+              setIsCreatingChat(false);
             })
             .catch(() => {
               // Fallback to building from responses
@@ -163,41 +193,48 @@ export default function Home() {
               responsesRef.current = newResponses;
               setResponses(newResponses);
               setGraphNodes(buildGraphFromResponses(newResponses));
-            });
 
+              // Also clear loading states on fallback
+              setIsStreaming(false);
+              setStatusMessage("");
+              setStreamingUserMessage("");
+              setProcessingQuery(null);
+              setIsLoading(false);
+              setIsCreatingChat(false);
+            });
+        } else {
+          // User navigated away - just clear loading states, don't navigate
+          setIsCreatingChat(false);
+          setIsLoading(false);
+          setIsLoadingTransition(false);
           setIsStreaming(false);
           setStatusMessage("");
           setStreamingUserMessage("");
           setProcessingQuery(null);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-
-          // Remove pending chat now that real chat exists
-          setPendingChats([]);
-        },
-        (error) => {
-          console.error("Message error:", error);
-          setStatusMessage(`Error: ${error.error}`);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-          setIsStreaming(false);
-          setProcessingQuery(null);
         }
-      );
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setErrorMessage("Trevi encountered an error — it's not your fault");
-      setIsError(true);
-      setIsLoading(false);
-      setIsCreatingChat(false);
-      setIsStreaming(false);
-      setProcessingQuery(null);
-      setPendingChats([]); // Clear pending on error
-      // Note: isLoadingTransition stays true to show error screen
-    }
-  }, [rootNodeId]);
+
+        currentPendingTempIdRef.current = null;
+        isWatchingLoadingRef.current = false;
+      },
+      // onError callback
+      (errorMsg) => {
+        console.error("Message error:", errorMsg);
+        setErrorMessage("Trevi encountered an error — it's not your fault");
+        setIsError(true);
+        setIsLoading(false);
+        // Keep isLoadingTransition true to show error screen if still watching
+        if (!isWatchingLoadingRef.current) {
+          setIsLoadingTransition(false);
+        }
+        setIsCreatingChat(false);
+        setIsStreaming(false);
+        setProcessingQuery(null);
+        currentPendingTempIdRef.current = null;
+        isWatchingLoadingRef.current = false;
+      },
+      isWatchingLoadingRef
+    );
+  }, [rootNodeId, startChatCreation, startBackgroundPolling]);
 
   // Handle follow-up message from the full conversation sidebar
   const handleSidebarMessage = useCallback(async (message: string) => {
@@ -333,13 +370,27 @@ export default function Home() {
 
   // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
+    // Mark that we're no longer watching the loading screen (if a chat was being created)
+    isWatchingLoadingRef.current = false;
+    setIsLoadingTransition(false);
+    setIsCreatingChat(false); // Important: clear this so loading screen goes away
+
     // Close chat sidebar when selecting a different chat
     setIsChatSidebarOpen(false);
     setIsLoading(true);
-    setStatusMessage("Loading conversation...");
     setCurrentChatId(chatId);
+    currentChatIdRef.current = chatId; // Sync ref immediately
     setIsError(false); // Clear previous error
     setErrorMessage("");
+
+    // Clear ALL streaming/status states immediately to prevent bleeding
+    setIsStreaming(false);
+    setIsNodeStreaming(false);
+    setStatusMessage("Loading conversation...");
+    setNodeStatusMessage("");
+    setProcessingQuery(null);
+    setStreamingUserMessage("");
+    setNodeStreamingUserMessage("");
 
     try {
       const graphResponse = await getGraph(chatId);
@@ -354,7 +405,23 @@ export default function Home() {
 
       setRootNodeId(root);
       setResponses([]);
-      setStatusMessage("");
+
+      // Restore exploration status if this chat has active connections
+      const activeNodes = connectionManagerRef.current.getActiveNodeIds(chatId);
+      if (activeNodes.size > 0) {
+        const activeLabels = Array.from(activeNodes)
+          .map(id => nodes.find(n => n.id === id)?.label)
+          .filter((label): label is string => !!label);
+        if (activeLabels.length > 0) {
+          setStatusMessage(activeLabels[0] || "Exploring...");
+          setIsStreaming(true);
+        } else {
+          setStatusMessage("");
+        }
+      } else {
+        setStatusMessage("");
+        setIsStreaming(false);
+      }
     } catch (error) {
       console.error("Failed to load chat graph:", error);
       setStatusMessage("Failed to load conversation");
@@ -370,6 +437,9 @@ export default function Home() {
 
   // Handle clicking logo to go back to landing page
   const handleLogoClick = useCallback(() => {
+    // Mark that we're no longer watching the loading screen
+    isWatchingLoadingRef.current = false;
+
     // Cancel all active explorations
     connectionManagerRef.current.cancelAll();
     setCurrentChatId(null);
@@ -383,8 +453,10 @@ export default function Home() {
     setIsCreatingChat(false);
     setIsChatSidebarOpen(false);
     setIsStreaming(false);
-    setIsError(false); // Clear error state
+    setIsError(false);
     setErrorMessage("");
+    // Clear loading transition immediately if navigating away
+    setIsLoadingTransition(false);
   }, []);
 
   // Handle starting a new chat
@@ -392,12 +464,14 @@ export default function Home() {
     handleLogoClick();
   }, [handleLogoClick]);
 
-  // Handle clicking a direction node to explore (supports multiple concurrent explorations)
+  // Handle clicking a direction node to explore (chat-scoped)
   const handleDirectionClick = useCallback(async (nodeId: string) => {
-    if (!currentChatId) return;
+    // Capture chatId at the start of the request for use in async callbacks
+    const chatId = currentChatId;
+    if (!chatId) return;
 
-    // Check if this specific node is already loading
-    if (connectionManagerRef.current.isLoading(nodeId)) return;
+    // Check if this specific node is already loading for this chat
+    if (connectionManagerRef.current.isLoading(nodeId, chatId)) return;
 
     // Get node and parent labels for formatted explore message
     const clickedNode = graphNodes.find(n => n.id === nodeId);
@@ -408,8 +482,8 @@ export default function Home() {
     // Create formatted explore message
     const exploreMessage = `|-> Explore - '${nodeLabel}' in relation to - '${parentLabel}'`;
 
-    // Start tracking this connection
-    const abortController = connectionManagerRef.current.start(nodeId, nodeLabel);
+    // Start tracking this connection with chatId
+    const abortController = connectionManagerRef.current.start(nodeId, nodeLabel, chatId);
     setIsStreaming(true);
     setStatusMessage(nodeLabel); // Short label for status
     setProcessingQuery(nodeLabel); // Short label for global pill
@@ -425,27 +499,41 @@ export default function Home() {
     setErrorMessage("");
 
     try {
-      const request = createDirectedQueryRequest(currentChatId, nodeId);
+      const request = createDirectedQueryRequest(chatId, nodeId);
 
       await sendMessage(
         request,
         (update) => {
-          // Only update status if this is the only active connection
-          if (connectionManagerRef.current.getActiveCount() === 1) {
+          // Only update status if this is still the active chat
+          if (currentChatIdRef.current !== chatId) return;
+          // Only update status if this is the only active connection for this chat
+          if (connectionManagerRef.current.getActiveCount(chatId) === 1) {
             setStatusMessage(update.message);
           }
         },
         (event) => {
           // Mark connection as complete
           connectionManagerRef.current.complete(nodeId);
+
+          // Only update UI if this is still the active chat
+          if (currentChatIdRef.current !== chatId) {
+            // Background exploration completed - user switched away
+            // Data is persisted on backend, will be fetched when user switches back
+            return;
+          }
+
           setCurrentNodeId(event.node_id);
 
           getGraph(event.chat_id)
             .then((graphResponse) => {
+              // Double-check we're still on the same chat
+              if (currentChatIdRef.current !== chatId) return;
               const { nodes } = buildGraphNodesFromResponse(graphResponse);
               setGraphNodes(nodes);
             })
             .catch((fetchError) => {
+              // Only show error if still on same chat
+              if (currentChatIdRef.current !== chatId) return;
               console.error("Failed to refresh graph:", fetchError);
               const newResponses = [...responsesRef.current, event];
               responsesRef.current = newResponses;
@@ -455,8 +543,10 @@ export default function Home() {
               setErrorMessage("Failed to refresh graph after exploration");
             })
             .finally(() => {
-              // Clear status if no more active connections
-              if (connectionManagerRef.current.getActiveCount() === 0) {
+              // Only update status if still on same chat
+              if (currentChatIdRef.current !== chatId) return;
+              // Clear status if no more active connections for this chat
+              if (connectionManagerRef.current.getActiveCount(chatId) === 0) {
                 setStatusMessage("");
                 setProcessingQuery(null);
                 setStreamingUserMessage("");
@@ -471,10 +561,14 @@ export default function Home() {
         (error) => {
           console.error("Direction query error:", error);
           connectionManagerRef.current.error(nodeId, error.error || 'Failed to explore');
+
+          // Only update UI if still on same chat
+          if (currentChatIdRef.current !== chatId) return;
+
           setIsError(true);
           setErrorMessage(`Error exploring: ${error.error}`);
 
-          if (connectionManagerRef.current.getActiveCount() === 0) {
+          if (connectionManagerRef.current.getActiveCount(chatId) === 0) {
             setIsStreaming(false);
             setIsNodeStreaming(false);
             setNodeStatusMessage("");
@@ -494,11 +588,16 @@ export default function Home() {
         console.error("Failed to explore direction:", error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to explore';
         connectionManagerRef.current.error(nodeId, errorMessage);
-        setIsError(true);
-        setErrorMessage(`Failed to explore: ${errorMessage}`);
+
+        // Only update UI if still on same chat
+        if (currentChatIdRef.current === chatId) {
+          setIsError(true);
+          setErrorMessage(`Failed to explore: ${errorMessage}`);
+        }
       }
 
-      if (connectionManagerRef.current.getActiveCount() === 0) {
+      // Only update UI if still on same chat
+      if (currentChatIdRef.current === chatId && connectionManagerRef.current.getActiveCount(chatId) === 0) {
         setIsStreaming(false);
         setIsNodeStreaming(false);
         setNodeStatusMessage("");
@@ -607,8 +706,26 @@ export default function Home() {
     } else if (currentChatId) {
       // On success: open sidebar
       setIsChatSidebarOpen(true);
+
+      // Fallback: if graph nodes is still empty, fetch the graph again
+      // This handles race conditions where the graph fetch might have failed silently
+      if (graphNodes.length === 0) {
+        getGraph(currentChatId)
+          .then((graphResponse) => {
+            const { nodes, currentNodeId: nodeId, rootNodeId: root } = buildGraphNodesFromResponse(graphResponse);
+            setGraphNodes(nodes);
+            if (nodeId) setCurrentNodeId(nodeId);
+            if (root) setRootNodeId(root);
+          })
+          .catch((error) => {
+            console.error("Fallback graph fetch failed:", error);
+          });
+      }
+
+      // Also refresh the chat list to ensure sidebar shows the new chat
+      refreshChats();
     }
-  }, [currentChatId, isError]);
+  }, [currentChatId, isError, graphNodes.length, refreshChats]);
 
   // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
@@ -646,8 +763,6 @@ export default function Home() {
         onNewChat={handleNewChat}
         onLogoClick={handleLogoClick}
         onChatDeleted={handleLogoClick}
-        isCreatingChat={isCreatingChat}
-        pendingChats={pendingChats}
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
@@ -708,6 +823,7 @@ export default function Home() {
                 onBriefCacheUpdate={(nodeId, data) => {
                   setBriefCache(prev => new Map(prev).set(nodeId, data));
                 }}
+                skipLayoutAnimation={isLoading}
                 globalStatus={{
                   isActive: isStreaming || isNodeStreaming || isLoading || loadingNodeIds.size > 0,
                   message: statusMessage || nodeStatusMessage,
@@ -759,5 +875,14 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrap HomeContent with ChatStoreProvider
+export default function Home() {
+  return (
+    <ChatStoreProvider>
+      <HomeContent />
+    </ChatStoreProvider>
   );
 }

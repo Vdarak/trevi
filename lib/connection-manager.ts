@@ -8,6 +8,7 @@
 export interface ActiveConnection {
     nodeId: string;
     nodeLabel: string;
+    chatId: string;
     abortController: AbortController;
     startedAt: number;
 }
@@ -35,7 +36,7 @@ export class ConnectionManager {
      * Start a new connection for a node.
      * If a connection already exists for this node, it will be aborted first.
      */
-    start(nodeId: string, nodeLabel: string): AbortController {
+    start(nodeId: string, nodeLabel: string, chatId: string): AbortController {
         // Abort existing connection for this node if any
         const existing = this.connections.get(nodeId);
         if (existing) {
@@ -46,6 +47,7 @@ export class ConnectionManager {
         this.connections.set(nodeId, {
             nodeId,
             nodeLabel,
+            chatId,
             abortController,
             startedAt: Date.now(),
         });
@@ -96,22 +98,35 @@ export class ConnectionManager {
     /**
      * Get active connection node IDs.
      */
-    getActiveNodeIds(): Set<string> {
-        return new Set(this.connections.keys());
+    /**
+     * Get active connection node IDs, optionally filtered by chatId.
+     */
+    getActiveNodeIds(chatId?: string): Set<string> {
+        if (!chatId) return new Set(this.connections.keys());
+        return new Set(
+            Array.from(this.connections.values())
+                .filter(conn => conn.chatId === chatId)
+                .map(conn => conn.nodeId)
+        );
     }
 
     /**
-     * Check if a specific node is currently loading.
+     * Check if a specific node is currently loading, optionally scoped to a chat.
      */
-    isLoading(nodeId: string): boolean {
-        return this.connections.has(nodeId);
+    isLoading(nodeId: string, chatId?: string): boolean {
+        const conn = this.connections.get(nodeId);
+        if (!conn) return false;
+        if (chatId && conn.chatId !== chatId) return false;
+        return true;
     }
 
     /**
-     * Get count of active connections.
+     * Get count of active connections, optionally filtered by chatId.
      */
-    getActiveCount(): number {
-        return this.connections.size;
+    getActiveCount(chatId?: string): number {
+        if (!chatId) return this.connections.size;
+        return Array.from(this.connections.values())
+            .filter(conn => conn.chatId === chatId).length;
     }
 
     /**

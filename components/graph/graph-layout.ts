@@ -367,7 +367,8 @@ export function useLayoutAnimation(
     targetEdges: Edge[],
     setNodes: (nodes: Node[] | ((nodes: Node[]) => Node[])) => void,
     setEdges: (edges: Edge[] | ((edges: Edge[]) => Edge[])) => void,
-    onAnimationComplete?: () => void
+    onAnimationComplete?: () => void,
+    skipAnimation?: boolean
 ) {
     const { getNodes } = useReactFlow();
     const animationFrameRef = useRef<number | null>(null);
@@ -378,7 +379,8 @@ export function useLayoutAnimation(
     useEffect(() => {
         const currentNodes = getNodes();
 
-        if (currentNodes.length === 0) {
+        // Skip animation: set nodes/edges instantly
+        if (skipAnimation || currentNodes.length === 0) {
             setNodes(targetNodes);
             setEdges(targetEdges);
             prevTargetNodesRef.current = targetNodes;
@@ -527,5 +529,5 @@ export function useLayoutAnimation(
         return () => {
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
         };
-    }, [targetNodes, targetEdges, setNodes, setEdges, getNodes]);
+    }, [targetNodes, targetEdges, setNodes, setEdges, getNodes, skipAnimation]);
 }
