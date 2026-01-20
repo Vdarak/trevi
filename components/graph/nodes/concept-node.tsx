@@ -123,7 +123,8 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
                             ? "bg-slate-900 text-white border-[3px] border-blue-500"
                             : "bg-slate-900 text-white border-[3px] border-slate-900"
                         : data.isLoading
-                            ? "bg-blue-50 border-[3px] border-blue-300"
+                            // Use transparent border to maintain layout size, but hide visual border (replaced by crawling ants)
+                            ? "bg-blue-50 border-[3px] border-transparent"
                             : isClickableDirection
                                 ? data.isInActivePath || data.isActiveNode
                                     ? "bg-gradient-to-r from-blue-50 to-indigo-50 border-[3px] border-blue-500 cursor-pointer"
@@ -144,6 +145,26 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
                     }
                 }}
             >
+                {/* Crawling Ants Border Effect for Exploring Nodes */}
+                {data.isLoading && (
+                    <svg
+                        className="absolute inset-[calc(-3px)] w-[calc(100%+6px)] h-[calc(100%+6px)] pointer-events-none overflow-visible z-10"
+                    >
+                        <rect
+                            x="1.5"
+                            y="1.5"
+                            width="calc(100% - 3px)"
+                            height="calc(100% - 3px)"
+                            fill="none"
+                            stroke="#3b82f6" // blue-500
+                            strokeWidth="5"
+                            strokeDasharray="4 4"
+                            rx={data.isRoot ? 9999 : isParentNode ? 12 : 8} // Match standard radius: rounded-xl=12px, rounded-lg=8px
+                            className="animate-marching-ants"
+                        />
+                    </svg>
+                )}
+
                 {/* Target Handle - not needed for root node (has no parent) */}
                 {!data.isRoot && (
                     <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />

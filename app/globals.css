@@ -301,6 +301,21 @@ body {
   }
 }
 
+@keyframes marching-ants {
+  0% {
+    stroke-dashoffset: 0;
+  }
+
+  100% {
+    stroke-dashoffset: -16;
+    /* Multiple of dasharray (4+4=8) for seamless loop. 8*2=16 */
+  }
+}
+
+.animate-marching-ants {
+  animation: marching-ants 1s linear infinite;
+}
+
 .animate-ticker {
   animation: ticker-scroll 8s linear infinite;
 }
