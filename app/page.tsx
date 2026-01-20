@@ -11,7 +11,6 @@ import { GraphLoading } from '@/components/loading/graph-loading';
 import {
   sendMessage,
   editChatResponse,
-  createNewChatRequest,
   createDirectedQueryRequest,
   createFollowUpRequest,
   getGraph,
@@ -21,13 +20,21 @@ import {
   type TreviBriefResponse,
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
+import { ChatStoreProvider, useChatStore } from '@/lib/chat-store';
 
-export default function Home() {
+function HomeContent() {
+  // ChatStore for centralized state
+  const { startChatCreation, startBackgroundPolling, refreshChats } = useChatStore();
+
   // Chat state
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const currentChatIdRef = useRef<string | null>(null); // Stable ref for async callbacks
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [rootNodeId, setRootNodeId] = useState<string | null>(null);
+
+  // Track if user is still watching the loading screen (for background polling)
+  const isWatchingLoadingRef = useRef<boolean>(false);
+  const currentPendingTempIdRef = useRef<string | null>(null);
 
   // Graph state
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
@@ -84,9 +91,6 @@ export default function Home() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileActiveTab, setMobileActiveTab] = useState<'graph' | 'chat'>('graph');
 
-  // Pending chats for optimistic UI (SWR pattern)
-  const [pendingChats, setPendingChats] = useState<Array<{ id: string, name: string, isLoading: boolean }>>([]);
-
   // Brief cache: nodeId -> brief data (shared between sidebar and modal)
   const [briefCache, setBriefCache] = useState<Map<string, TreviBriefResponse['trevi_brief']>>(new Map());
 
@@ -134,39 +138,53 @@ export default function Home() {
 
   // Handle sending a message from the landing page (always creates a new chat)
   const handleSendMessage = useCallback(async (message: string) => {
+    // Mark that we're watching this loading screen
+    isWatchingLoadingRef.current = true;
+
     setIsLoading(true);
     setIsCreatingChat(true);
     setIsLoadingTransition(true);
     setStatusMessage(message);
-    setStreamingUserMessage(message); // Same for normal messages
+    setStreamingUserMessage(message);
     setProcessingQuery(message);
     setIsStreaming(true);
 
-    try {
-      const request = createNewChatRequest(message);
+    // Create pending chat in the store
+    const tempId = startChatCreation(message);
+    currentPendingTempIdRef.current = tempId;
 
-      // Add optimistic pending chat with query as name
-      const pendingId = `pending-${Date.now()}`;
-      setPendingChats(prev => [...prev, { id: pendingId, name: message.slice(0, 50) + (message.length > 50 ? '...' : ''), isLoading: true }]);
-
-      await sendMessage(
-        request,
-        (update) => {
-          setStatusMessage(update.message);
-        },
-        (event) => {
+    // Start background polling via ChatStore
+    startBackgroundPolling(
+      tempId,
+      message,
+      // onComplete callback
+      (event, wasWatching) => {
+        if (wasWatching) {
+          // User stayed on loading screen - update UI fully
           setCurrentChatId(event.chat_id);
+
+          // Initial set from event (optimistic/immediate)
           setCurrentNodeId(event.node_id);
+          setRootNodeId(event.node_id); // Always set for new chats
 
-          if (!rootNodeId) {
-            setRootNodeId(event.node_id);
-          }
-
-          // Fetch full graph to ensure sidebar has complete data
+          // Fetch full graph - wait for it before clearing loading states
           getGraph(event.chat_id)
             .then((graphResponse) => {
-              const { nodes } = buildGraphNodesFromResponse(graphResponse);
+              const { nodes, currentNodeId: graphCurrentNode, rootNodeId: graphRootNode } = buildGraphNodesFromResponse(graphResponse);
               setGraphNodes(nodes);
+
+              // Update IDs to match exactly what's in the graph response
+              // This is critical to ensure the sidebar can find the nodes
+              if (graphCurrentNode) setCurrentNodeId(graphCurrentNode);
+              if (graphRootNode) setRootNodeId(graphRootNode);
+
+              // Only clear loading states AFTER graph is loaded
+              setIsStreaming(false);
+              setStatusMessage("");
+              setStreamingUserMessage("");
+              setProcessingQuery(null);
+              setIsLoading(false);
+              setIsCreatingChat(false);
             })
             .catch(() => {
               // Fallback to building from responses
@@ -174,41 +192,48 @@ export default function Home() {
               responsesRef.current = newResponses;
               setResponses(newResponses);
               setGraphNodes(buildGraphFromResponses(newResponses));
-            });
 
+              // Also clear loading states on fallback
+              setIsStreaming(false);
+              setStatusMessage("");
+              setStreamingUserMessage("");
+              setProcessingQuery(null);
+              setIsLoading(false);
+              setIsCreatingChat(false);
+            });
+        } else {
+          // User navigated away - just clear loading states, don't navigate
+          setIsCreatingChat(false);
+          setIsLoading(false);
+          setIsLoadingTransition(false);
           setIsStreaming(false);
           setStatusMessage("");
           setStreamingUserMessage("");
           setProcessingQuery(null);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-
-          // Remove pending chat now that real chat exists
-          setPendingChats([]);
-        },
-        (error) => {
-          console.error("Message error:", error);
-          setStatusMessage(`Error: ${error.error}`);
-          setIsLoading(false);
-          setIsCreatingChat(false);
-          setIsStreaming(false);
-          setProcessingQuery(null);
         }
-      );
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setErrorMessage("Trevi encountered an error — it's not your fault");
-      setIsError(true);
-      setIsLoading(false);
-      setIsCreatingChat(false);
-      setIsStreaming(false);
-      setProcessingQuery(null);
-      setPendingChats([]); // Clear pending on error
-      // Note: isLoadingTransition stays true to show error screen
-    }
-  }, [rootNodeId]);
+
+        currentPendingTempIdRef.current = null;
+        isWatchingLoadingRef.current = false;
+      },
+      // onError callback
+      (errorMsg) => {
+        console.error("Message error:", errorMsg);
+        setErrorMessage("Trevi encountered an error — it's not your fault");
+        setIsError(true);
+        setIsLoading(false);
+        // Keep isLoadingTransition true to show error screen if still watching
+        if (!isWatchingLoadingRef.current) {
+          setIsLoadingTransition(false);
+        }
+        setIsCreatingChat(false);
+        setIsStreaming(false);
+        setProcessingQuery(null);
+        currentPendingTempIdRef.current = null;
+        isWatchingLoadingRef.current = false;
+      },
+      isWatchingLoadingRef
+    );
+  }, [rootNodeId, startChatCreation, startBackgroundPolling]);
 
   // Handle follow-up message from the full conversation sidebar
   const handleSidebarMessage = useCallback(async (message: string) => {
@@ -344,6 +369,11 @@ export default function Home() {
 
   // Handle selecting a chat from left sidebar
   const handleChatSelect = useCallback(async (chatId: string) => {
+    // Mark that we're no longer watching the loading screen (if a chat was being created)
+    isWatchingLoadingRef.current = false;
+    setIsLoadingTransition(false);
+    setIsCreatingChat(false); // Important: clear this so loading screen goes away
+
     // Close chat sidebar when selecting a different chat
     setIsChatSidebarOpen(false);
     setIsLoading(true);
@@ -406,6 +436,9 @@ export default function Home() {
 
   // Handle clicking logo to go back to landing page
   const handleLogoClick = useCallback(() => {
+    // Mark that we're no longer watching the loading screen
+    isWatchingLoadingRef.current = false;
+
     // Cancel all active explorations
     connectionManagerRef.current.cancelAll();
     setCurrentChatId(null);
@@ -419,8 +452,10 @@ export default function Home() {
     setIsCreatingChat(false);
     setIsChatSidebarOpen(false);
     setIsStreaming(false);
-    setIsError(false); // Clear error state
+    setIsError(false);
     setErrorMessage("");
+    // Clear loading transition immediately if navigating away
+    setIsLoadingTransition(false);
   }, []);
 
   // Handle starting a new chat
@@ -670,8 +705,26 @@ export default function Home() {
     } else if (currentChatId) {
       // On success: open sidebar
       setIsChatSidebarOpen(true);
+
+      // Fallback: if graph nodes is still empty, fetch the graph again
+      // This handles race conditions where the graph fetch might have failed silently
+      if (graphNodes.length === 0) {
+        getGraph(currentChatId)
+          .then((graphResponse) => {
+            const { nodes, currentNodeId: nodeId, rootNodeId: root } = buildGraphNodesFromResponse(graphResponse);
+            setGraphNodes(nodes);
+            if (nodeId) setCurrentNodeId(nodeId);
+            if (root) setRootNodeId(root);
+          })
+          .catch((error) => {
+            console.error("Fallback graph fetch failed:", error);
+          });
+      }
+
+      // Also refresh the chat list to ensure sidebar shows the new chat
+      refreshChats();
     }
-  }, [currentChatId, isError]);
+  }, [currentChatId, isError, graphNodes.length, refreshChats]);
 
   // Determine what to show
   const showLandingPage = !currentChatId && !isCreatingChat;
@@ -709,8 +762,6 @@ export default function Home() {
         onNewChat={handleNewChat}
         onLogoClick={handleLogoClick}
         onChatDeleted={handleLogoClick}
-        isCreatingChat={isCreatingChat}
-        pendingChats={pendingChats}
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
@@ -823,5 +874,14 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrap HomeContent with ChatStoreProvider
+export default function Home() {
+  return (
+    <ChatStoreProvider>
+      <HomeContent />
+    </ChatStoreProvider>
   );
 }

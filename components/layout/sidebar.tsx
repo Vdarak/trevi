@@ -2,19 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Plus, Menu, X } from 'lucide-react';
+import { Trash2, Plus, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
-import { getChats, deleteChat, formatRelativeTime, getUserMetadata, type Chat } from '@/lib/api';
+import { deleteChat, formatRelativeTime, getUserMetadata } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
 import GradientText from '@/components/ui/gradient-text';
-
-interface PendingChat {
-  id: string;
-  name: string;
-  isLoading: boolean;
-}
+import { useChatStore, type DisplayChat } from '@/lib/chat-store';
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   selectedChatId?: string | null;
@@ -22,10 +17,8 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onNewChat?: () => void;
   onLogoClick?: () => void;
   onChatDeleted?: () => void;
-  isCreatingChat?: boolean;
-  pendingChats?: PendingChat[]; // Chats currently being generated
-  isMobileOpen?: boolean; // Mobile menu open state
-  onMobileClose?: () => void; // Close mobile menu
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export function Sidebar({
@@ -35,14 +28,13 @@ export function Sidebar({
   onNewChat,
   onLogoClick,
   onChatDeleted,
-  isCreatingChat,
-  pendingChats = [],
   isMobileOpen = false,
   onMobileClose,
   ...props
 }: SidebarProps) {
   const router = useRouter();
-  const [chats, setChats] = useState<Chat[]>([]);
+  const { getMergedChats, refreshChats, removePending, state } = useChatStore();
+
   const [loading, setLoading] = useState(true);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
@@ -54,69 +46,55 @@ export function Sidebar({
     status: 'confirm' | 'deleting' | 'success';
   } | null>(null);
 
-  const fetchChatsAndCheckUser = async () => {
-    try {
-      // Fetch chats and user metadata simultaneously
-      const [chatsResponse, userMetadata] = await Promise.all([
-        getChats(),
-        getUserMetadata(),
-      ]);
-
-      // Check if user needs onboarding
-      if (!userMetadata.has_user_info) {
-        router.push('/welcome');
-        return;
+  // Initial load: fetch chats and check user metadata
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const userMetadata = await getUserMetadata();
+        if (!userMetadata.has_user_info) {
+          router.push('/welcome');
+          return;
+        }
+        await refreshChats();
+      } catch (error) {
+        console.error("Failed to initialize:", error);
+      } finally {
+        setLoading(false);
       }
+    };
+    init();
+  }, [refreshChats, router]);
 
-      setChats(chatsResponse.chats);
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchChatsAndCheckUser();
-  }, []);
-
-  // Refresh chats when a new chat might have been created
-  useEffect(() => {
-    if (selectedChatId) {
-      // Only fetch chats, user is already verified
-      getChats().then(response => setChats(response.chats)).catch(console.error);
-    }
-  }, [selectedChatId]);
+  // Get merged chats from the store (pending + real, deduplicated)
+  const mergedChats = getMergedChats();
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent chat selection
+    e.stopPropagation();
 
-    // Find the chat name for the confirmation modal
-    const chat = chats.find(c => c.chat_id === chatId);
-    const chatName = chat?.chat_name || 'this chat';
+    // Find the chat for the confirmation modal
+    const chat = mergedChats.find(c => c.id === chatId);
+    const chatName = chat?.name || 'this chat';
 
-    // Show confirmation modal instead of browser confirm
     setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'confirm' });
   };
 
-  // Actually perform the deletion after confirmation
   const confirmDeleteChat = async () => {
     if (!deleteConfirmation) return;
 
     const { chatId, chatName } = deleteConfirmation;
-    // Show deleting state
     setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'deleting' });
 
     try {
-      await deleteChat(chatId);
-      // Refresh chats after deletion
-      const response = await getChats();
-      setChats(response.chats);
+      // Check if it's a pending chat (starts with 'pending-')
+      if (chatId.startsWith('pending-')) {
+        removePending(chatId);
+      } else {
+        await deleteChat(chatId);
+        await refreshChats();
+      }
 
-      // Show success state
       setDeleteConfirmation({ isOpen: true, chatId, chatName, status: 'success' });
 
-      // Auto-close after showing success
       setTimeout(() => {
         setDeleteConfirmation(null);
         onChatDeleted?.();
@@ -127,16 +105,117 @@ export function Sidebar({
     }
   };
 
-  // Handle chat select on mobile - close sidebar after selection
   const handleChatSelectMobile = (chatId: string) => {
+    // Don't allow selecting pending chats
+    if (chatId.startsWith('pending-')) return;
+
     onChatSelect?.(chatId);
     onMobileClose?.();
   };
 
-  // Handle new chat on mobile - close sidebar
   const handleNewChatMobile = () => {
     onNewChat?.();
     onMobileClose?.();
+  };
+
+  // Render a single chat item
+  const renderChatItem = (chat: DisplayChat) => {
+    const isPending = chat.isPending;
+    const isError = chat.status === 'error';
+    const isComplete = chat.status === 'complete';
+    const isSelected = selectedChatId === chat.id;
+
+    if (isPending) {
+      // Pending chat (loading/complete/error states)
+      return (
+        <div key={chat.id} className="relative group">
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-between font-normal h-auto py-2.5 px-3 text-left transition-all duration-300",
+              isError
+                ? "bg-red-50 border border-red-200 hover:bg-red-100"
+                : isComplete
+                  ? "bg-green-50 border border-green-200"
+                  : "bg-slate-50 border border-slate-200 hover:bg-slate-100"
+            )}
+            disabled={!isError}
+            onClick={isError ? () => removePending(chat.id) : undefined}
+          >
+            <div className="flex flex-col items-start flex-1 min-w-0">
+              <span className={cn(
+                "text-sm truncate w-full transition-colors duration-300",
+                isError ? "text-red-600" : isComplete ? "text-green-700" : "text-slate-600"
+              )}>
+                {chat.name || 'Creating Topic Tree...'}
+              </span>
+              {isError && (
+                <span className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {chat.errorMessage || 'Failed - click to dismiss'}
+                </span>
+              )}
+              {isComplete && (
+                <span className="text-xs text-green-600 mt-0.5">
+                  Ready
+                </span>
+              )}
+            </div>
+            {chat.isLoading && (
+              <TreviSpinner size={16} className="text-slate-400 flex-shrink-0" />
+            )}
+            {isComplete && (
+              <svg className="w-4 h-4 text-green-500 flex-shrink-0 animate-in zoom-in duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {isError && (
+              <X className="w-4 h-4 text-red-400 flex-shrink-0" />
+            )}
+          </Button>
+        </div>
+      );
+    }
+
+    // Regular chat
+    return (
+      <div
+        key={chat.id}
+        className="relative group"
+        onMouseEnter={() => setHoveredChatId(chat.id)}
+        onMouseLeave={() => setHoveredChatId(null)}
+      >
+        <Button
+          variant={isSelected ? "secondary" : "ghost"}
+          className={cn(
+            "w-full justify-start font-normal h-auto py-2 text-left pr-10",
+            isSelected && "bg-slate-200"
+          )}
+          onClick={() => handleChatSelectMobile(chat.id)}
+        >
+          <div className="flex flex-col items-start w-full">
+            <span className="text-sm text-slate-700 truncate w-full">
+              {chat.name}
+            </span>
+            <span className="text-xs text-slate-400">
+              {formatRelativeTime(chat.createdAt)}
+            </span>
+          </div>
+        </Button>
+
+        {/* Delete button - appears on hover */}
+        {hoveredChatId === chat.id && (
+          <button
+            onClick={(e) => handleDeleteChat(chat.id, e)}
+            disabled={deletingChatId === chat.id}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+            title="Delete chat"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -205,68 +284,12 @@ export function Sidebar({
               Topic Trees
             </h2>
             <div className="space-y-1">
-              {/* Show pending chats with optimistic names - styled like regular chats */}
-              {pendingChats.map((pending) => (
-                <div
-                  key={pending.id}
-                  className="relative group"
-                >
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between font-normal h-auto py-2.5 px-3 text-left bg-slate-50 border border-slate-200 hover:bg-slate-100"
-                    disabled={pending.isLoading}
-                  >
-                    <span className="text-sm text-slate-600 truncate">
-                      {pending.name || 'Creating Topic Tree...'}
-                    </span>
-                    <TreviSpinner size={16} className="text-slate-400 flex-shrink-0" />
-                  </Button>
-                </div>
-              ))}
-
               {loading ? (
                 <p className="px-4 text-sm text-slate-400">Loading...</p>
-              ) : chats.length === 0 && pendingChats.length === 0 ? (
+              ) : mergedChats.length === 0 ? (
                 <p className="px-4 text-sm text-slate-400">No Topic Trees yet</p>
               ) : (
-                [...chats].reverse().map((chat) => (
-                  <div
-                    key={chat.chat_id}
-                    className="relative group"
-                    onMouseEnter={() => setHoveredChatId(chat.chat_id)}
-                    onMouseLeave={() => setHoveredChatId(null)}
-                  >
-                    <Button
-                      variant={selectedChatId === chat.chat_id ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start font-normal h-auto py-2 text-left pr-10",
-                        selectedChatId === chat.chat_id && "bg-slate-200"
-                      )}
-                      onClick={() => handleChatSelectMobile(chat.chat_id)}
-                    >
-                      <div className="flex flex-col items-start w-full">
-                        <span className="text-sm text-slate-700 truncate w-full">
-                          {chat.chat_name}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {formatRelativeTime(chat.created_at)}
-                        </span>
-                      </div>
-                    </Button>
-
-                    {/* Delete button - appears on hover */}
-                    {hoveredChatId === chat.chat_id && (
-                      <button
-                        onClick={(e) => handleDeleteChat(chat.chat_id, e)}
-                        disabled={deletingChatId === chat.chat_id}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                        title="Delete chat"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))
+                mergedChats.map(chat => renderChatItem(chat))
               )}
             </div>
           </div>
@@ -288,7 +311,6 @@ export function Sidebar({
             onClick={(e) => e.stopPropagation()}
           >
             {deleteConfirmation.status === 'success' ? (
-              // Success state
               <div className="flex flex-col items-center py-4">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
                   <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -299,7 +321,6 @@ export function Sidebar({
                 <p className="text-sm text-slate-500 mt-1">Successfully deleted</p>
               </div>
             ) : deleteConfirmation.status === 'deleting' ? (
-              // Deleting state
               <div className="flex flex-col items-center py-4">
                 <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
                   <svg className="w-6 h-6 text-slate-600 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -311,7 +332,6 @@ export function Sidebar({
                 <p className="text-sm text-slate-500 mt-1">Please wait</p>
               </div>
             ) : (
-              // Confirm state
               <>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -349,4 +369,3 @@ export function Sidebar({
     </>
   );
 }
-
