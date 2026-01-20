@@ -522,14 +522,59 @@ function HomeContent() {
             return;
           }
 
-          setCurrentNodeId(event.node_id);
-
           getGraph(event.chat_id)
             .then((graphResponse) => {
               // Double-check we're still on the same chat
               if (currentChatIdRef.current !== chatId) return;
               const { nodes } = buildGraphNodesFromResponse(graphResponse);
-              setGraphNodes(nodes);
+
+              // SAFETY: Ensure the new node exists in the graph (optimistic update if backend is lagging)
+              if (!nodes.find(n => n.id === event.node_id)) {
+                console.warn("New node missing from graph fetch, patching locally:", event.node_id);
+                // Patch conversation node
+                nodes.push({
+                  id: event.node_id,
+                  label: event.label,
+                  summary: event.summary,
+                  parentId: event.parent_node_id === "root" ? null : event.parent_node_id,
+                  isDirection: false, // It's a verified explored node now
+                  payload: event.payload,
+                  citations: event.citations,
+                });
+
+                // Patch direction nodes from event
+                if (event.direction_nodes) {
+                  event.direction_nodes.forEach(dn => {
+                    // Avoid duplicates if they somehow exist
+                    if (!nodes.find(n => n.id === dn.node_id)) {
+                      nodes.push({
+                        id: dn.node_id,
+                        label: dn.label,
+                        summary: dn.summary,
+                        parentId: event.node_id, // Parent is the new node
+                        isDirection: true,
+                      });
+                    }
+                  });
+                }
+              }
+
+              // STRICT DEDUPLICATION: Ensure no duplicate IDs exist
+              // ReactFlow throws errors if multiple nodes share the same ID
+              const uniqueNodes = Array.from(
+                new Map(nodes.map(node => [node.id, node])).values()
+              );
+
+              setGraphNodes(uniqueNodes);
+
+              // CRITICAL: Use the current node from the API response as the source of truth
+              // This ensures we select exactly what the backend considers the active node
+              if (graphResponse.current_node) {
+                setCurrentNodeId(graphResponse.current_node);
+              } else {
+                // Fallback to event node if API doesn't return it (shouldn't happen)
+                setCurrentNodeId(event.node_id);
+              }
             })
             .catch((fetchError) => {
               // Only show error if still on same chat
@@ -539,6 +584,8 @@ function HomeContent() {
               responsesRef.current = newResponses;
               setResponses(newResponses);
               setGraphNodes(buildGraphFromResponses(newResponses));
+              // Also update current node on fallback
+              setCurrentNodeId(event.node_id);
               setIsError(true);
               setErrorMessage("Failed to refresh graph after exploration");
             })
@@ -636,16 +683,65 @@ function HomeContent() {
           setStatusMessage(update.message);
         },
         (event) => {
-          // Update current node to the new response node
-          setCurrentNodeId(event.node_id);
-
           // Refresh graph to get updated data
           getGraph(event.chat_id)
             .then((graphResponse) => {
               const { nodes } = buildGraphNodesFromResponse(graphResponse);
-              setGraphNodes(nodes);
+
+              // SAFETY: Ensure the new node exists in the graph (optimistic update if backend is lagging)
+              if (!nodes.find(n => n.id === event.node_id)) {
+                console.warn("New node missing from graph fetch (follow-up), patching locally:", event.node_id);
+                // Patch conversation node
+                nodes.push({
+                  id: event.node_id,
+                  label: event.label,
+                  summary: event.summary,
+                  parentId: event.parent_node_id === "root" ? null : event.parent_node_id,
+                  isDirection: false,
+                  payload: event.payload,
+                  citations: event.citations,
+                });
+
+                // Patch direction nodes from event
+                if (event.direction_nodes) {
+                  event.direction_nodes.forEach(dn => {
+                    if (!nodes.find(n => n.id === dn.node_id)) {
+                      nodes.push({
+                        id: dn.node_id,
+                        label: dn.label,
+                        summary: dn.summary,
+                        parentId: event.node_id,
+                        isDirection: true,
+                      });
+                    }
+                  });
+                }
+              }
+
+              // STRICT DEDUPLICATION: Ensure no duplicate IDs exist
+              const uniqueNodes = Array.from(
+                new Map(nodes.map(node => [node.id, node])).values()
+              );
+
+              setGraphNodes(uniqueNodes);
+
+              // CRITICAL: Use the current node from the API response as the source of truth
+              if (graphResponse.current_node) {
+                setCurrentNodeId(graphResponse.current_node);
+              } else {
+                setCurrentNodeId(event.node_id);
+              }
             })
-            .catch(console.error);
+            .catch((err) => {
+              console.error("Failed to refresh graph:", err);
+              // Fallback to local update if fetch fails
+              const newResponses = [...responsesRef.current, event];
+              responsesRef.current = newResponses;
+              setResponses(newResponses);
+              setGraphNodes(buildGraphFromResponses(newResponses));
+              // Also update current node on fallback
+              setCurrentNodeId(event.node_id);
+            })
 
           setIsNodeStreaming(false);
           setNodeStatusMessage("");

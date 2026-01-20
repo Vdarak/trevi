@@ -818,6 +818,26 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     [onNodeClick, graphNodes, setNodes, setEdges, viewMode, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, getNodes]
   );
 
+  const getMiniMapNodeColor = useCallback((node: any) => {
+    // Active node gets bright blue
+    if (node.data?.isActiveNode) return "#3b82f6";
+    // Nodes in the active path get a lighter blue
+    if (node.data?.isInActivePath) return "#93c5fd";
+    // Root node gets dark color
+    if (node.data?.isRoot) return "#0f172a";
+    // Default nodes
+    return "#e2e8f0";
+  }, []);
+
+  const getMiniMapStrokeColor = useCallback((node: any) => {
+    // Active node gets blue stroke
+    if (node.data?.isActiveNode) return "#1d4ed8";
+    // Path nodes get light blue stroke
+    if (node.data?.isInActivePath) return "#3b82f6";
+    // Others get subtle stroke
+    return "#cbd5e1";
+  }, []);
+
   if (graphNodes.length === 0) {
     return (
       <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -975,24 +995,8 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         onMove={(_, vp) => setViewport(vp)}
       >
         <MiniMap
-          nodeColor={(node) => {
-            // Active node gets bright blue
-            if (node.data?.isActiveNode) return "#3b82f6";
-            // Nodes in the active path get a lighter blue
-            if (node.data?.isInActivePath) return "#93c5fd";
-            // Root node gets dark color
-            if (node.data?.isRoot) return "#0f172a";
-            // Default nodes
-            return "#e2e8f0";
-          }}
-          nodeStrokeColor={(node) => {
-            // Active node gets blue stroke
-            if (node.data?.isActiveNode) return "#1d4ed8";
-            // Path nodes get light blue stroke
-            if (node.data?.isInActivePath) return "#3b82f6";
-            // Others get subtle stroke
-            return "#cbd5e1";
-          }}
+          nodeColor={getMiniMapNodeColor}
+          nodeStrokeColor={getMiniMapStrokeColor}
           nodeStrokeWidth={2}
           maskColor="rgba(0,0,0,0.1)"
         />
