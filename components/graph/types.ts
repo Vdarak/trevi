@@ -33,10 +33,16 @@ export interface KnowledgeGraphProps {
     globalStatus?: GlobalStatus;
     // Brief cache for sharing between sidebar and modal
     chatId?: string;
-    briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
-    onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
+    briefCache?: Map<string, BriefState>;
+    onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
     // Skip layout animation (useful when switching between chats)
     skipLayoutAnimation?: boolean;
+}
+
+export interface BriefState {
+    data: TreviBriefResponse['trevi_brief'] | null;
+    isLoading: boolean;
+    error?: string;
 }
 
 export interface GlobalStatus {

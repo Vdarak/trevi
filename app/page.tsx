@@ -21,6 +21,7 @@ import {
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
 import { ChatStoreProvider, useChatStore } from '@/lib/chat-store';
+import type { BriefState } from '@/components/graph/types';
 
 function HomeContent() {
   // ChatStore for centralized state
@@ -91,8 +92,8 @@ function HomeContent() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileActiveTab, setMobileActiveTab] = useState<'graph' | 'chat'>('graph');
 
-  // Brief cache: nodeId -> brief data (shared between sidebar and modal)
-  const [briefCache, setBriefCache] = useState<Map<string, TreviBriefResponse['trevi_brief']>>(new Map());
+  // Brief cache: nodeId -> brief state (shared between sidebar and modal)
+  const [briefCache, setBriefCache] = useState<Map<string, BriefState>>(new Map());
 
   // Get all conversation nodes for full sidebar (nodes with payloads, in order)
   const conversationNodes = useMemo(() => {

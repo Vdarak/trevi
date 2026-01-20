@@ -5,6 +5,7 @@ import { X, Send, Sparkle, Check } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { MessagePayload, Citation, TreviBriefResponse } from '@/lib/api';
 import { fetchTreviBrief } from '@/lib/api';
+import type { BriefState } from '@/components/graph/types';
 import { StatusLine } from '@/components/ui/status-line';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
@@ -26,8 +27,8 @@ interface NodeConversationPanelProps {
     nodeId?: string;
     isRootNode?: boolean; // Hide brief button for root nodes
     // Brief cache for sharing data between sidebar and modal
-    briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
-    onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
+    briefCache?: Map<string, BriefState>;
+    onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
 }
 
 /**
@@ -55,20 +56,18 @@ export function NodeConversationPanel({
     const [inputValue, setInputValue] = useState('');
     const [showBrief, setShowBrief] = useState(false);
 
-    // Trevi Brief states - initialize from cache if available
-    const cachedBrief = nodeId && briefCache?.get(nodeId);
-    const [briefData, setBriefData] = useState<TreviBriefResponse['trevi_brief'] | null>(cachedBrief || null);
-    const [isBriefLoading, setIsBriefLoading] = useState(false);
+    // Trevi Brief states - derived from cache
+    const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
+    const briefData = briefState?.data || null;
+    const isBriefLoading = briefState?.isLoading || false;
     const briefConnectionRef = useRef<AbortController | null>(null);
 
-    // Update briefData when nodeId changes and cache has data
+    // Reset showBrief when switching nodes in modal
     React.useEffect(() => {
-        if (nodeId && briefCache?.has(nodeId)) {
-            setBriefData(briefCache.get(nodeId) || null);
-        } else {
-            setBriefData(null);
+        if (nodeId) {
+            if (isRootNode) setShowBrief(false);
         }
-    }, [nodeId, briefCache]);
+    }, [nodeId, isRootNode]);
 
     // Filter to only assistant messages and combine them
     const aiContent = useMemo(() => {
@@ -123,7 +122,8 @@ export function NodeConversationPanel({
 
                                     // If opening brief for the first time and no data, fetch it
                                     if (newState && !briefData && !isBriefLoading && chatId && nodeId) {
-                                        setIsBriefLoading(true);
+                                        // Set loading in cache
+                                        onBriefCacheUpdate?.(nodeId, { data: null, isLoading: true });
 
                                         const controller = new AbortController();
                                         briefConnectionRef.current = controller;
@@ -133,20 +133,19 @@ export function NodeConversationPanel({
                                             nodeId,
                                             undefined,
                                             (response) => {
-                                                setBriefData(response.trevi_brief);
-                                                setIsBriefLoading(false);
-                                                // Update parent cache
-                                                onBriefCacheUpdate?.(nodeId, response.trevi_brief);
+                                                // Update cache with data
+                                                onBriefCacheUpdate?.(nodeId, { data: response.trevi_brief, isLoading: false });
                                             },
                                             (error) => {
                                                 console.error('Trevi Brief error:', error);
-                                                setIsBriefLoading(false);
+                                                // Update cache with error
+                                                onBriefCacheUpdate?.(nodeId, { data: null, isLoading: false, error: error.error });
                                             },
                                             { signal: controller.signal }
                                         ).catch((err) => {
                                             if (err.name !== 'AbortError') {
                                                 console.error('Trevi Brief fetch failed:', err);
-                                                setIsBriefLoading(false);
+                                                onBriefCacheUpdate?.(nodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
                                             }
                                         });
                                     }
@@ -313,20 +312,18 @@ export function NodeConversationModal({
     const [inputValue, setInputValue] = useState('');
     const [showBrief, setShowBrief] = useState(false);
 
-    // Trevi Brief states - initialize from cache if available
-    const cachedBrief = nodeId && briefCache?.get(nodeId);
-    const [briefData, setBriefData] = useState<TreviBriefResponse['trevi_brief'] | null>(cachedBrief || null);
-    const [isBriefLoading, setIsBriefLoading] = useState(false);
+    // Trevi Brief states - derived from cache
+    const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
+    const briefData = briefState?.data || null;
+    const isBriefLoading = briefState?.isLoading || false;
     const briefConnectionRef = useRef<AbortController | null>(null);
 
-    // Update briefData when nodeId changes and cache has data
+    // Reset showBrief when switching nodes in modal
     React.useEffect(() => {
-        if (nodeId && briefCache?.has(nodeId)) {
-            setBriefData(briefCache.get(nodeId) || null);
-        } else {
-            setBriefData(null);
+        if (nodeId) {
+            if (isRootNode) setShowBrief(false);
         }
-    }, [nodeId, briefCache]);
+    }, [nodeId, isRootNode]);
 
     // Calculate transform origin based on click position
     const transformOrigin = useMemo(() => {
@@ -407,7 +404,8 @@ export function NodeConversationModal({
 
                                         // If opening brief for the first time and no data, fetch it
                                         if (newState && !briefData && !isBriefLoading && chatId && nodeId) {
-                                            setIsBriefLoading(true);
+                                            // Set loading in cache
+                                            onBriefCacheUpdate?.(nodeId, { data: null, isLoading: true });
 
                                             const controller = new AbortController();
                                             briefConnectionRef.current = controller;
@@ -417,20 +415,19 @@ export function NodeConversationModal({
                                                 nodeId,
                                                 undefined,
                                                 (response) => {
-                                                    setBriefData(response.trevi_brief);
-                                                    setIsBriefLoading(false);
-                                                    // Update parent cache
-                                                    onBriefCacheUpdate?.(nodeId, response.trevi_brief);
+                                                    // Update cache with data
+                                                    onBriefCacheUpdate?.(nodeId, { data: response.trevi_brief, isLoading: false });
                                                 },
                                                 (error) => {
                                                     console.error('Trevi Brief error:', error);
-                                                    setIsBriefLoading(false);
+                                                    // Update cache with error
+                                                    onBriefCacheUpdate?.(nodeId, { data: null, isLoading: false, error: error.error });
                                                 },
                                                 { signal: controller.signal }
                                             ).catch((err) => {
                                                 if (err.name !== 'AbortError') {
                                                     console.error('Trevi Brief fetch failed:', err);
-                                                    setIsBriefLoading(false);
+                                                    onBriefCacheUpdate?.(nodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
                                                 }
                                             });
                                         }

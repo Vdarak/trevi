@@ -1019,7 +1019,10 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
           clickPosition={modalData.clickPosition}
           chatId={chatId}
           nodeId={modalData.nodeId}
-          isRootNode={graphNodes.find(n => n.id === modalData.nodeId)?.parentId === null}
+          isRootNode={(() => {
+            const node = graphNodes.find(n => n.id === modalData.nodeId);
+            return node?.parentId === null || node?.parentId === 'root';
+          })()}
           briefCache={briefCache}
           onBriefCacheUpdate={onBriefCacheUpdate}
         />

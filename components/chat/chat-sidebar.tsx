@@ -10,6 +10,7 @@ import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { cn } from '@/lib/utils';
 import { TreviBriefCard } from '@/components/chat/trevi-brief-card';
 import { getBibliography, fetchTreviBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
+import type { BriefState } from '@/components/graph/types';
 
 interface ConversationNode {
     id: string;
@@ -35,8 +36,8 @@ interface ChatSidebarProps {
     onEditMessage?: (nodeId: string, newMessage: string) => void;
     onClose: () => void;
     // Brief cache for sharing data between sidebar and modal
-    briefCache?: Map<string, TreviBriefResponse['trevi_brief']>;
-    onBriefCacheUpdate?: (nodeId: string, data: TreviBriefResponse['trevi_brief']) => void;
+    briefCache?: Map<string, BriefState>;
+    onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
 }
 
 const tabs = [
@@ -75,20 +76,29 @@ export function ChatSidebar({
     const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
     const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
 
-    // Trevi Brief states - initialize from cache if available
-    const cachedBrief = activeNodeId && briefCache?.get(activeNodeId);
-    const [briefData, setBriefData] = useState<TreviBriefResponse['trevi_brief'] | null>(cachedBrief || null);
-    const [isBriefLoading, setIsBriefLoading] = useState(false);
+    // Trevi Brief states - derived from cache
+    const briefState = activeNodeId ? briefCache?.get(activeNodeId) : undefined;
+    const briefData = briefState?.data || null;
+    const isBriefLoading = briefState?.isLoading || false;
     const briefConnectionRef = useRef<AbortController | null>(null);
 
-    // Update briefData when activeNodeId changes and cache has data
+    // Reset showBrief when switching nodes (optional, but good UX)
     React.useEffect(() => {
-        if (activeNodeId && briefCache?.has(activeNodeId)) {
-            setBriefData(briefCache.get(activeNodeId) || null);
-        } else {
-            setBriefData(null); // Reset when switching to a node without cached brief
+        if (activeNodeId) {
+            // If we want to keep brief open if it exists, remove this.
+            // But usually switching nodes should probably close the brief unless purely syncing.
+            // For now, let's NOT auto-close it if data exists, but user asked for sync.
+            // Actually, if I switch nodes, I probably want to see the brief if I had it open...
+            // BUT, if I switch to a new node that doesn't have a brief, showing an empty brief might be annoying?
+            // The prompt says "When clicked on brief in sidebar it should automatically update on the modal".
+            // It doesn't strictly say "openness" is synced, but "update".
+            // Let's keep `showBrief` local for now, but ensure data syncs.
+            // Correction: The prompt says "black ones... should not be visible or open".
+            // So for root nodes, force close.
+            const isRoot = conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
+            if (isRoot) setShowBrief(false);
         }
-    }, [activeNodeId, briefCache]);
+    }, [activeNodeId, conversationNodes]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -326,7 +336,8 @@ export function ChatSidebar({
 
                                         // If opening brief for the first time and no data, fetch it
                                         if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
-                                            setIsBriefLoading(true);
+                                            // Set loading state in cache immediately
+                                            onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: true });
 
                                             // Create AbortController for cleanup
                                             const controller = new AbortController();
@@ -337,21 +348,20 @@ export function ChatSidebar({
                                                 activeNodeId,
                                                 undefined, // No progressive updates for now
                                                 (response) => {
-                                                    setBriefData(response.trevi_brief);
-                                                    setIsBriefLoading(false);
-                                                    // Update parent cache
-                                                    onBriefCacheUpdate?.(activeNodeId, response.trevi_brief);
+                                                    // Update parent cache with data
+                                                    onBriefCacheUpdate?.(activeNodeId, { data: response.trevi_brief, isLoading: false });
                                                 },
                                                 (error) => {
                                                     console.error('Trevi Brief error:', error);
-                                                    setIsBriefLoading(false);
+                                                    // Update parent cache with error
+                                                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: error.error });
                                                 },
                                                 { signal: controller.signal }
                                             ).catch((err) => {
                                                 // Handle abort or other errors
                                                 if (err.name !== 'AbortError') {
                                                     console.error('Trevi Brief fetch failed:', err);
-                                                    setIsBriefLoading(false);
+                                                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
                                                 }
                                             });
                                         }
