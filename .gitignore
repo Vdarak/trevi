@@ -39,3 +39,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+aws-backend-deploy.ps1
+aws-frontend-deploy.ps1
