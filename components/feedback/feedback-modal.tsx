@@ -195,7 +195,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             {/* All Likert Scales */}
             {renderLikertScale('overallUsability', 'The application was easy to use overall.')}
             {renderLikertScale('controlsClarity', 'The controls were intuitive.')}
-            {renderLikertScale('navigationEase', 'Navigating the graph was straightforward.')}
+            {renderLikertScale('navigationEase', 'Navigating the topic tree was straightforward.')}
             {renderLikertScale('visualClarity', 'The visual design helped me focus.')}
             {renderLikertScale('learningEffectiveness', 'This tool helps me learn effectively.')}
             {renderLikertScale('gistContentUseful', 'Was trevi gist content useful?')}
