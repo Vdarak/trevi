@@ -59,7 +59,19 @@ const edgeTypes = {
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate, skipLayoutAnimation }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, unreadNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate, skipLayoutAnimation }: KnowledgeGraphProps) {
+  // Deduplicate graphNodes to prevent rendering issues and key warnings
+  const graphNodes = useMemo(() => {
+    const seen = new Set<string>();
+    return rawGraphNodes
+      .map(node => ({ ...node, id: String(node.id) })) // Ensure ID is string
+      .filter(node => {
+        if (seen.has(node.id)) return false;
+        seen.add(node.id);
+        return true;
+      });
+  }, [rawGraphNodes]);
+
   const { fitView, fitBounds, getViewport, zoomIn, zoomOut, getNodes } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -69,6 +81,7 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
   const [direction, setDirection] = useState<'TB' | 'LR'>('LR');
   const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(initialActiveNodeId || null); // Track clicked/active node for persistent path highlighting
+  const [pulsingNodeId, setPulsingNodeId] = useState<string | null>(initialActiveNodeId || null); // "You Are Here" beacon state (dismissible)
   const [viewMode, setViewMode] = useState<'panel' | 'modal'>('modal'); // Toggle between panel and modal view
   const [isStatusPillExpanded, setIsStatusPillExpanded] = useState(false); // Toggle for status pill dropdown
   const [statusPillWarning, setStatusPillWarning] = useState<string | undefined>(undefined); // Temporary warning message for status pill
@@ -172,10 +185,19 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     }
   }, [rootNodeId]);
 
+  // Track last clicked node to prevent re-pulsing on click-triggered updates
+  const lastClickedNodeIdRef = useRef<string | null>(null);
+
   // Sync activeNodeId with initialActiveNodeId prop when it changes (e.g., loading different chat)
   useEffect(() => {
     if (initialActiveNodeId !== undefined) {
       setActiveNodeId(initialActiveNodeId);
+
+      // Reset pulsing beacon when loading a new chat or external exploration fixes
+      // But NOT if it was triggered by a user click on that node
+      if (initialActiveNodeId !== lastClickedNodeIdRef.current) {
+        setPulsingNodeId(initialActiveNodeId);
+      }
     }
   }, [initialActiveNodeId]);
 
@@ -284,6 +306,10 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
         isLoading: loadingNodeIds instanceof Set
           ? loadingNodeIds.has(node.id)
           : (loadingNodeIds || []).includes(node.id),
+        isUnread: unreadNodeIds instanceof Set
+          ? unreadNodeIds.has(node.id)
+          : false,
+        isBeaconActive: pulsingNodeId === node.id, // Only show beacon/pulse if this is the active pulsing node
         parentId: node.parentId, // Pass parentId for animation
         direction: direction, // Pass direction for floating chevron positioning
         depth: depthMap.get(node.id) || 0, // Pass depth for hierarchy styling
@@ -533,11 +559,20 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
             }
             onDirectionClick?.(node.id);
           },
+          onNodeClick: () => {
+            // Explicitly handle click-dismissal and selection from within the node
+            // This bypasses potential ReactFlow event bubbling issues
+            setPulsingNodeId(null);
+            setActiveNodeId(node.id);
+            lastClickedNodeIdRef.current = node.id;
+            // Also trigger the external handler (to open modal/panel)
+            onNodeClick?.(node.id);
+          },
           onCloseExpanded: () => setExpandedNodeId(null),
         },
       };
     });
-  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes, activePathNodeIds, activeNodeId, globalStatus, loadingNodeIds]);
+  }, [layoutedNodes, toggleCollapse, onDirectionClick, expandedNodeId, graphNodes, activePathNodeIds, activeNodeId, globalStatus, loadingNodeIds, pulsingNodeId]);
 
   // Compute edges with active path styling
   const edgesWithActivePath = useMemo(() => {
@@ -583,6 +618,11 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
     (event: React.MouseEvent, node: Node) => {
       setHoveredNodeId(node.id);
       setTooltipPosition({ x: event.clientX, y: event.clientY });
+
+      // Dismiss pulsing beacon on hover (User has seen it)
+      if (pulsingNodeId === node.id) {
+        setPulsingNodeId(null);
+      }
 
       const { nodeIds: hoverNodeIds, edgeIds: hoverEdgeIds } = findPathToRoot(node.id, edges, rootIds);
       // Find last edge for hover path (target = hovered node)
@@ -722,9 +762,15 @@ function KnowledgeGraphInner({ nodes: graphNodes, rootNodeId, onNodeClick, onDir
 
       onNodeClick?.(node.id);
 
+      // Record this click to prevent re-pulsing when props update
+      lastClickedNodeIdRef.current = node.id;
+
       // Set this node as the active node for persistent path highlighting
       // The memo will automatically compute and apply the active path styling
       setActiveNodeId(node.id);
+
+      // Dismiss the pulsing beacon when user clicks/interacts with the node
+      setPulsingNodeId(null);
 
       // Find the graph node data to check for messages
       const graphNode = graphNodes.find(n => n.id === node.id);

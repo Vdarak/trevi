@@ -401,8 +401,9 @@ export function useLayoutAnimation(
         });
 
         targetNodes.forEach(targetNode => {
-            if (currentNodeMap.has(targetNode.id)) {
-                startNodeMap.set(targetNode.id, currentNodeMap.get(targetNode.id)!);
+            const targetId = String(targetNode.id); // Ensure string ID
+            if (currentNodeMap.has(targetId)) {
+                startNodeMap.set(targetId, currentNodeMap.get(targetId)!);
             } else {
                 const parentId = targetNode.data.parentId as string;
                 let startPos = { x: 0, y: 0 };
@@ -459,7 +460,8 @@ export function useLayoutAnimation(
             const t = 1 - Math.pow(1 - progress, 3);
 
             const nextTargetNodes = targetNodes.map(targetNode => {
-                const startNode = startNodesRef.current.get(targetNode.id);
+                const targetId = String(targetNode.id);
+                const startNode = startNodesRef.current.get(targetId);
                 if (!startNode) return targetNode;
 
                 const startOpacity = Number(startNode.style?.opacity ?? 1);
@@ -503,13 +505,27 @@ export function useLayoutAnimation(
                 };
             });
 
-            setNodes([...nextTargetNodes, ...nextExitingNodes, ...panelNodes]);
+            // Deduplicate panel nodes to prevent key warnings if state gets corrupted
+            const uniquePanelNodes = Array.from(new Map(panelNodes.map(n => [n.id, n])).values());
+
+            const nextNodes = [...nextTargetNodes, ...nextExitingNodes, ...uniquePanelNodes];
+            // STRICT DEDUPLICATION: Ensure no duplicate IDs exist and all are strings
+            const uniqueNextNodes = Array.from(
+                new Map(nextNodes.map(n => [String(n.id), { ...n, id: String(n.id) }])).values()
+            );
+
+            setNodes(uniqueNextNodes);
 
             if (progress < 1) {
                 animationFrameRef.current = requestAnimationFrame(animate);
             } else {
                 startTimeRef.current = null;
-                setNodes([...targetNodes, ...panelNodes]);
+                const finalNodes = [...targetNodes, ...panelNodes];
+                // STRICT DEDUPLICATION: Ensure no duplicate IDs exist and all are strings
+                const uniqueFinalNodes = Array.from(
+                    new Map(finalNodes.map(n => [String(n.id), { ...n, id: String(n.id) }])).values()
+                );
+                setNodes(uniqueFinalNodes);
                 onAnimationComplete?.();
             }
         };

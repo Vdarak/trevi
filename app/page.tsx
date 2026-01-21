@@ -18,6 +18,7 @@ import {
   deleteNode,
   type CompleteEvent,
   type TreviBriefResponse,
+  pollForCompletion,
 } from '@/lib/api';
 import { ConnectionManager, type ConnectionError } from '@/lib/connection-manager';
 import { ChatStoreProvider, useChatStore } from '@/lib/chat-store';
@@ -54,6 +55,35 @@ function HomeContent() {
   const [connectionErrors, setConnectionErrors] = useState<ConnectionError[]>([]);
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [processingQuery, setProcessingQuery] = useState<string | null>(null);
+
+  // Unread nodes state
+  const [unreadNodeIds, setUnreadNodeIds] = useState<Set<string>>(new Set());
+
+  // Load unread nodes from localStorage when chat changes
+  useEffect(() => {
+    if (currentChatId) {
+      const savedUnread = localStorage.getItem(`trevi-unread-${currentChatId}`);
+      if (savedUnread) {
+        try {
+          setUnreadNodeIds(new Set(JSON.parse(savedUnread)));
+        } catch (e) {
+          console.error("Failed to parse unread nodes:", e);
+          setUnreadNodeIds(new Set());
+        }
+      } else {
+        setUnreadNodeIds(new Set());
+      }
+    } else {
+      setUnreadNodeIds(new Set());
+    }
+  }, [currentChatId]);
+
+  // Persist unread nodes to localStorage whenever they change
+  useEffect(() => {
+    if (currentChatId) {
+      localStorage.setItem(`trevi-unread-${currentChatId}`, JSON.stringify(Array.from(unreadNodeIds)));
+    }
+  }, [unreadNodeIds, currentChatId]);
 
   // Subscribe to ConnectionManager changes (chat-scoped)
   useEffect(() => {
@@ -252,6 +282,14 @@ function HomeContent() {
     try {
       const request = createFollowUpRequest(message, currentChatId, currentNodeId);
 
+      // Start tracking this connection with chatId
+      // Use the node ID as the key for ConnectionManager to show loading state on the node
+      const abortController = connectionManagerRef.current.start(currentNodeId, message, currentChatId);
+
+      // Persist follow-up request
+      // We use a different key than 'exploring' to distinguish, but the pattern is identical
+      localStorage.setItem(`trevi-followup-${currentChatId}`, JSON.stringify({ nodeId: currentNodeId, message }));
+
       await sendMessage(
         request,
         (update) => {
@@ -259,6 +297,10 @@ function HomeContent() {
           setNodeStatusMessage(update.message);
         },
         (event) => {
+          // Mark connection as complete
+          connectionManagerRef.current.complete(currentNodeId);
+          localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
           setCurrentNodeId(event.node_id);
 
           getGraph(event.chat_id)
@@ -279,6 +321,9 @@ function HomeContent() {
         },
         (error) => {
           console.error("Follow-up error:", error);
+          connectionManagerRef.current.error(currentNodeId, error.error || 'Failed to send follow-up');
+          localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
           setStatusMessage(`Error: ${error.error}`);
           setIsStreaming(false);
           setProcessingQuery(null);
@@ -375,8 +420,8 @@ function HomeContent() {
     setIsLoadingTransition(false);
     setIsCreatingChat(false); // Important: clear this so loading screen goes away
 
-    // Close chat sidebar when selecting a different chat
-    setIsChatSidebarOpen(false);
+    // Close chat sidebar when selecting a different chat - REMOVED to keep/open it
+    // setIsChatSidebarOpen(false);
     setIsLoading(true);
     setCurrentChatId(chatId);
     currentChatIdRef.current = chatId; // Sync ref immediately
@@ -402,6 +447,9 @@ function HomeContent() {
       const savedNodeId = localStorage.getItem(`trevi-active-node-${chatId}`);
       const activeNodeId = savedNodeId && nodes.some(n => n.id === savedNodeId) ? savedNodeId : nodeId;
       setCurrentNodeId(activeNodeId);
+
+      // Auto-open sidebar when selecting a chat to show the conversation
+      setIsChatSidebarOpen(true);
 
       setRootNodeId(root);
       setResponses([]);
@@ -433,7 +481,263 @@ function HomeContent() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [unreadNodeIds]); // Add unreadNodeIds as dependency if needed, though strictly not needed for this callback
+
+  // Resume exploration if there was one pending for this chat
+  useEffect(() => {
+    if (!currentChatId || isLoading) return;
+
+    const savedExploration = localStorage.getItem(`trevi-exploring-${currentChatId}`);
+    if (savedExploration) {
+      try {
+        const { nodeId, nodeLabel } = JSON.parse(savedExploration);
+        console.log("Resuming exploration for:", nodeId, nodeLabel);
+
+        // Check if already exploring (e.g. from fast switching)
+        if (connectionManagerRef.current.isLoading(nodeId, currentChatId)) return;
+
+        // Restore UI state
+        const abortController = connectionManagerRef.current.start(nodeId, nodeLabel, currentChatId);
+        setIsStreaming(true);
+        setStatusMessage(nodeLabel);
+        setProcessingQuery(nodeLabel);
+        setStreamingUserMessage(`|-> Explore - '${nodeLabel}'...`); // Simplified resumption message
+        setIsChatSidebarOpen(true);
+
+        // Call pollForCompletion instead of sendMessage
+        pollForCompletion(
+          currentChatId,
+          (update) => {
+            if (currentChatIdRef.current !== currentChatId) return;
+            if (connectionManagerRef.current.getActiveCount(currentChatId) === 1) {
+              setStatusMessage(update.message);
+            }
+          },
+          (event) => {
+            // Mark connection as complete
+            connectionManagerRef.current.complete(nodeId);
+            localStorage.removeItem(`trevi-exploring-${currentChatId}`);
+
+            if (currentChatIdRef.current !== currentChatId) return;
+
+            // Mark as UNREAD
+            setUnreadNodeIds(prev => {
+              const next = new Set(prev);
+              next.add(event.node_id);
+              return next;
+            });
+
+            getGraph(event.chat_id)
+              .then((graphResponse) => {
+                if (currentChatIdRef.current !== currentChatId) return;
+                const { nodes } = buildGraphNodesFromResponse(graphResponse);
+
+                // SAFETY: Ensure the new node exists
+                if (!nodes.find(n => n.id === event.node_id)) {
+                  nodes.push({
+                    id: event.node_id,
+                    label: event.label,
+                    summary: event.summary,
+                    parentId: event.parent_node_id === "root" ? null : event.parent_node_id,
+                    isDirection: false,
+                    payload: event.payload,
+                    citations: event.citations,
+                  });
+                }
+
+                const uniqueNodes = Array.from(new Map(nodes.map(node => [node.id, node])).values());
+                setGraphNodes(uniqueNodes);
+
+                if (graphResponse.current_node) {
+                  setCurrentNodeId(graphResponse.current_node);
+                } else {
+                  setCurrentNodeId(event.node_id);
+                }
+              })
+              .catch((fetchError) => {
+                console.error("Failed to refresh graph resume:", fetchError);
+                if (currentChatIdRef.current === currentChatId) setIsError(true);
+              })
+              .finally(() => {
+                if (currentChatIdRef.current !== currentChatId) return;
+                if (connectionManagerRef.current.getActiveCount(currentChatId) === 0) {
+                  setStatusMessage("");
+                  setProcessingQuery(null);
+                  setStreamingUserMessage("");
+                  setIsStreaming(false);
+                }
+              });
+          },
+          (error) => {
+            console.error("Resume error:", error);
+            connectionManagerRef.current.error(nodeId, error.error || 'Failed to resume exploration');
+            localStorage.removeItem(`trevi-exploring-${currentChatId}`);
+
+            if (currentChatIdRef.current === currentChatId) {
+              setIsError(true);
+              setErrorMessage(`Error resuming exploration: ${error.error}`);
+              setIsStreaming(false);
+              setProcessingQuery(null);
+            }
+          },
+          { signal: abortController.signal }
+        ).catch(e => {
+          // Check for abort - if aborted (navigated away), KEEP the persistence so we can resume later
+          if (e.message === 'Aborted' || e.name === 'AbortError') {
+            console.log("Resumption aborted (navigation), keeping state");
+            connectionManagerRef.current.complete(nodeId);
+            return;
+          }
+
+          console.error("Poll catch:", e);
+          localStorage.removeItem(`trevi-exploring-${currentChatId}`);
+          connectionManagerRef.current.complete(nodeId); // Clean up manager
+
+          if (currentChatIdRef.current === currentChatId) {
+            setIsStreaming(false);
+            setProcessingQuery(null);
+          }
+        });
+
+      } catch (e) {
+        console.error("Failed to parse saved exploration:", e);
+        localStorage.removeItem(`trevi-exploring-${currentChatId}`);
+      }
+    }
+  }, [currentChatId, isLoading]);
+
+  // Resume follow-up if there was one pending for this chat
+  useEffect(() => {
+    if (!currentChatId || isLoading) return;
+
+    const savedFollowUp = localStorage.getItem(`trevi-followup-${currentChatId}`);
+    if (savedFollowUp) {
+      try {
+        const { nodeId, message } = JSON.parse(savedFollowUp);
+        console.log("Resuming follow-up for:", nodeId);
+
+        // Check if already exploring
+        if (connectionManagerRef.current.isLoading(nodeId, currentChatId)) return;
+
+        // Restore UI state
+        // We use the node ID so the visual effect appears on the node
+        const abortController = connectionManagerRef.current.start(nodeId, message, currentChatId);
+
+        setIsStreaming(true);
+        setStatusMessage(message);
+        setProcessingQuery(message);
+        setStreamingUserMessage(message);
+        setIsNodeStreaming(true);
+        setNodeStatusMessage(message);
+        setNodeStreamingUserMessage(message);
+
+        // Auto-open sidebar
+        setIsChatSidebarOpen(true);
+
+        // Call pollForCompletion
+        pollForCompletion(
+          currentChatId,
+          (update) => {
+            if (currentChatIdRef.current !== currentChatId) return;
+            if (connectionManagerRef.current.getActiveCount(currentChatId) === 1) {
+              setStatusMessage(update.message);
+              setNodeStatusMessage(update.message);
+            }
+          },
+          (event) => {
+            // Mark connection as complete
+            connectionManagerRef.current.complete(nodeId);
+            localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
+            if (currentChatIdRef.current !== currentChatId) return;
+
+            // Mark as UNREAD if it's a new node (though follow-ups often return same or new child)
+            setUnreadNodeIds(prev => {
+              const next = new Set(prev);
+              next.add(event.node_id);
+              return next;
+            });
+
+            getGraph(event.chat_id)
+              .then((graphResponse) => {
+                if (currentChatIdRef.current !== currentChatId) return;
+                const { nodes } = buildGraphNodesFromResponse(graphResponse);
+
+                // SAFETY: Ensure node exists
+                if (!nodes.find(n => n.id === event.node_id)) {
+                  nodes.push({
+                    id: event.node_id,
+                    label: event.label,
+                    summary: event.summary,
+                    parentId: event.parent_node_id === "root" ? null : event.parent_node_id,
+                    isDirection: false,
+                    payload: event.payload,
+                    citations: event.citations,
+                  });
+                }
+
+                const uniqueNodes = Array.from(new Map(nodes.map(node => [node.id, node])).values());
+                setGraphNodes(uniqueNodes);
+
+                if (graphResponse.current_node) {
+                  setCurrentNodeId(graphResponse.current_node);
+                } else {
+                  setCurrentNodeId(event.node_id);
+                }
+              })
+              .catch((fetchError) => {
+                console.error("Failed to refresh graph resume (follow-up):", fetchError);
+                if (currentChatIdRef.current === currentChatId) setIsError(true);
+              })
+              .finally(() => {
+                if (currentChatIdRef.current !== currentChatId) return;
+                if (connectionManagerRef.current.getActiveCount(currentChatId) === 0) {
+                  setStatusMessage("");
+                  setProcessingQuery(null);
+                  setStreamingUserMessage("");
+                  setIsStreaming(false);
+                  setIsNodeStreaming(false);
+                  setNodeStatusMessage("");
+                  setNodeStreamingUserMessage("");
+                }
+              });
+          },
+          (error) => {
+            console.error("Resume follow-up error:", error);
+            connectionManagerRef.current.error(nodeId, error.error || 'Failed to resume follow-up');
+            localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
+            if (currentChatIdRef.current === currentChatId) {
+              setIsError(true);
+              setErrorMessage(`Error resuming follow-up: ${error.error}`);
+              setIsStreaming(false);
+              setProcessingQuery(null);
+              setIsNodeStreaming(false);
+              setNodeStatusMessage("");
+              setNodeStreamingUserMessage("");
+            }
+          },
+          { signal: abortController.signal }
+        ).catch(e => {
+          if (e.message === 'Aborted' || e.name === 'AbortError') {
+            console.log("Resumption aborted (navigation), keeping state");
+            connectionManagerRef.current.complete(nodeId);
+            return;
+          }
+          console.error("Poll catch:", e);
+          localStorage.removeItem(`trevi-followup-${currentChatId}`);
+          connectionManagerRef.current.complete(nodeId);
+          if (currentChatIdRef.current === currentChatId) {
+            setIsStreaming(false);
+            setProcessingQuery(null);
+          }
+        });
+      } catch (e) {
+        console.error("Failed to parse saved follow-up:", e);
+        localStorage.removeItem(`trevi-followup-${currentChatId}`);
+      }
+    }
+  }, [currentChatId, isLoading]);
 
   // Handle clicking logo to go back to landing page
   const handleLogoClick = useCallback(() => {
@@ -498,6 +802,9 @@ function HomeContent() {
     setIsError(false); // Clear previous error
     setErrorMessage("");
 
+    // Persist exploration request
+    localStorage.setItem(`trevi-exploring-${chatId}`, JSON.stringify({ nodeId, nodeLabel }));
+
     try {
       const request = createDirectedQueryRequest(chatId, nodeId);
 
@@ -514,13 +821,25 @@ function HomeContent() {
         (event) => {
           // Mark connection as complete
           connectionManagerRef.current.complete(nodeId);
+          localStorage.removeItem(`trevi-exploring-${chatId}`);
 
           // Only update UI if this is still the active chat
           if (currentChatIdRef.current !== chatId) {
             // Background exploration completed - user switched away
-            // Data is persisted on backend, will be fetched when user switches back
+            // Still mark as unread so they see it when they return
+            // We can't update state directly if component unmounted/switched context easily, 
+            // but we can update localStorage directly for that chat
+            const savedUnread = localStorage.getItem(`trevi-unread-${chatId}`);
+            const unreadSet = savedUnread ? new Set(JSON.parse(savedUnread)) : new Set();
+            unreadSet.add(event.node_id);
+            localStorage.setItem(`trevi-unread-${chatId}`, JSON.stringify(Array.from(unreadSet)));
             return;
           }
+
+          // Current chat is active - update state
+          // Current chat is active - update state
+          // We will update unread status after fetching the graph to be precise with current_node
+
 
           getGraph(event.chat_id)
             .then((graphResponse) => {
@@ -575,6 +894,14 @@ function HomeContent() {
                 // Fallback to event node if API doesn't return it (shouldn't happen)
                 setCurrentNodeId(event.node_id);
               }
+
+              // Update unread nodes with the confirmed current node
+              const unreadId = graphResponse.current_node || event.node_id;
+              setUnreadNodeIds(prev => {
+                const next = new Set(prev);
+                next.add(unreadId);
+                return next;
+              });
             })
             .catch((fetchError) => {
               // Only show error if still on same chat
@@ -608,8 +935,10 @@ function HomeContent() {
         (error) => {
           console.error("Direction query error:", error);
           connectionManagerRef.current.error(nodeId, error.error || 'Failed to explore');
+          localStorage.removeItem(`trevi-exploring-${chatId}`);
 
           // Only update UI if still on same chat
+          if (currentChatIdRef.current !== chatId) return;
           if (currentChatIdRef.current !== chatId) return;
 
           setIsError(true);
@@ -656,6 +985,14 @@ function HomeContent() {
   // Handle clicking a node in the graph (panel is handled internally by KnowledgeGraph)
   const handleNodeClick = useCallback((nodeId: string) => {
     setCurrentNodeId(nodeId);
+    // Remove from unread list
+    setUnreadNodeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      }
+      return next;
+    });
     // Auto-open sidebar when clicking on a node
     setIsChatSidebarOpen(true);
   }, []);
@@ -676,6 +1013,12 @@ function HomeContent() {
     try {
       const request = createFollowUpRequest(message, currentChatId, nodeId);
 
+      // Start tracking connection
+      const abortController = connectionManagerRef.current.start(nodeId, message, currentChatId);
+
+      // Persist follow-up
+      localStorage.setItem(`trevi-followup-${currentChatId}`, JSON.stringify({ nodeId, message }));
+
       await sendMessage(
         request,
         (update) => {
@@ -683,6 +1026,10 @@ function HomeContent() {
           setStatusMessage(update.message);
         },
         (event) => {
+          // Complete connection tracking
+          connectionManagerRef.current.complete(nodeId);
+          localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
           // Refresh graph to get updated data
           getGraph(event.chat_id)
             .then((graphResponse) => {
@@ -731,6 +1078,14 @@ function HomeContent() {
               } else {
                 setCurrentNodeId(event.node_id);
               }
+
+              // Update unread nodes with the confirmed current node
+              const unreadId = graphResponse.current_node || event.node_id;
+              setUnreadNodeIds(prev => {
+                const next = new Set(prev);
+                next.add(unreadId);
+                return next;
+              });
             })
             .catch((err) => {
               console.error("Failed to refresh graph:", err);
@@ -752,6 +1107,9 @@ function HomeContent() {
         },
         (error) => {
           console.error("Node message error:", error);
+          connectionManagerRef.current.error(nodeId, error.error || 'Failed to send node message');
+          localStorage.removeItem(`trevi-followup-${currentChatId}`);
+
           setNodeStatusMessage(`Error: ${error.error}`);
           setIsNodeStreaming(false);
           setProcessingQuery(null);
@@ -907,6 +1265,7 @@ function HomeContent() {
                 onDirectionClick={handleDirectionClick}
                 onDeleteNode={handleDeleteNode}
                 loadingNodeIds={loadingNodeIds}
+                unreadNodeIds={unreadNodeIds}
                 onToggleChatSidebar={toggleChatSidebar}
                 isChatSidebarOpen={isChatSidebarOpen}
                 initialActiveNodeId={currentNodeId}

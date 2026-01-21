@@ -23,6 +23,7 @@ export interface KnowledgeGraphProps {
     onDirectionClick?: (nodeId: string) => void;
     onDeleteNode?: (nodeId: string) => Promise<void>;
     loadingNodeIds?: Set<string> | string[] | null;
+    unreadNodeIds?: Set<string> | null;
     onToggleChatSidebar?: () => void;
     isChatSidebarOpen?: boolean;
     initialActiveNodeId?: string | null;
@@ -73,6 +74,8 @@ export interface ConceptNodeData {
     childCount?: number;
     isDirection?: boolean;
     isLoading?: boolean;
+    isBeaconActive?: boolean; // "You Are Here" pulsing beacon (dismissible)
+    isUnread?: boolean;
     parentId?: string | null;
     direction?: 'TB' | 'LR';
     depth?: number;
@@ -81,6 +84,7 @@ export interface ConceptNodeData {
     citations?: Citation[];
     onToggleCollapse?: () => void;
     onDirectionClick?: () => void;
+    onNodeClick?: () => void;
     onExpand?: () => void;
     onCloseExpanded?: () => void;
 }

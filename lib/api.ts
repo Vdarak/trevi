@@ -434,37 +434,28 @@ export function createEditRequest(
  *   (error) => console.error(error)
  * );
  */
-export async function sendMessage(
-  request: MessageRequest,
+/**
+ * Polls for message completion status.
+ * Can be used to resume monitoring an existing operation.
+ * 
+ * @param chatId - The chat ID to poll status for
+ * @param onUpdate - Callback for status updates
+ * @param onComplete - Callback for completion
+ * @param onError - Callback for errors
+ * @param options - Optional abort signal
+ */
+export async function pollForCompletion(
+  chatId: string,
   onUpdate?: (event: UpdateEvent) => void,
   onComplete?: (event: CompleteEvent) => void,
   onError?: (event: ErrorEvent) => void,
   options?: { signal?: AbortSignal }
 ): Promise<void> {
-  // Step 1: Initiate message processing
-  const initResponse = await fetch(`${API_BASE_URL}/api/sessions/messages`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-    signal: options?.signal,
-  });
-
-  if (!initResponse.ok) {
-    const errorText = await initResponse.text();
-    onError?.({ error: errorText });
-    throw new Error(`Failed to send message: ${initResponse.statusText}`);
-  }
-
-  const initData: MessageInitResponse = await initResponse.json();
-  const chatId = initData.chat_id;
-
-  console.log("Message initiated, chat_id:", chatId, "polling for status...");
-
-  // Step 2: Poll for status every 4 seconds
   const POLL_INTERVAL = 4000;
   const MAX_POLLS = 60; // Max 4 minutes (60 * 4s)
   let pollCount = 0;
+
+  console.log("Starting polling for chat:", chatId);
 
   while (pollCount < MAX_POLLS) {
     if (options?.signal?.aborted) {
@@ -529,6 +520,55 @@ export async function sendMessage(
   const timeoutError = "Request timed out after 4 minutes";
   onError?.({ error: timeoutError });
   throw new Error(timeoutError);
+}
+
+/**
+ * Send a message and poll for completion.
+ * Replaces old SSE-based streaming with async polling approach.
+ * 
+ * @param request - Message request payload
+ * @param onUpdate - Callback for status updates (called during polling)
+ * @param onComplete - Callback for complete event (final response)
+ * @param onError - Callback for error events
+ * @param options - Optional abort signal
+ * 
+ * @example
+ * await sendMessage(
+ *   createNewChatRequest("What is philosophy?"),
+ *   (update) => console.log(update.message),
+ *   (complete) => console.log("Done:", complete.chat_id),
+ *   (error) => console.error(error)
+ * );
+ */
+export async function sendMessage(
+  request: MessageRequest,
+  onUpdate?: (event: UpdateEvent) => void,
+  onComplete?: (event: CompleteEvent) => void,
+  onError?: (event: ErrorEvent) => void,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
+  // Step 1: Initiate message processing
+  const initResponse = await fetch(`${API_BASE_URL}/api/sessions/messages`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal: options?.signal,
+  });
+
+  if (!initResponse.ok) {
+    const errorText = await initResponse.text();
+    onError?.({ error: errorText });
+    throw new Error(`Failed to send message: ${initResponse.statusText}`);
+  }
+
+  const initData: MessageInitResponse = await initResponse.json();
+  const chatId = initData.chat_id;
+
+  console.log("Message initiated, chat_id:", chatId, "polling for status...");
+
+  // Step 2: Use reusable polling logic
+  return pollForCompletion(chatId, onUpdate, onComplete, onError, options);
 }
 
 // ============================================================================

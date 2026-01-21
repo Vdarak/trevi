@@ -4,7 +4,6 @@ import React from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { Compass } from 'lucide-react';
 import { ConceptNodeData } from '../types';
-import { StatusLine } from '@/components/ui/status-line';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 
 // ============================================================================
@@ -114,10 +113,12 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
 
     return (
         <div className={`relative ${isHorizontal ? 'flex items-center' : 'flex flex-col items-center'}`}>
+
+
             {/* Main node box */}
             <div
                 className={`
-          relative ${sizeClass} ${radiusClass} ${shadowClass} transition-all duration-200 flex items-center gap-3 whitespace-nowrap
+          relative z-10 ${sizeClass} ${radiusClass} ${shadowClass} transition-all duration-200 flex items-center gap-3 whitespace-nowrap
           ${data.isRoot
                         ? data.isInActivePath || data.isActiveNode
                             ? "bg-slate-900 text-white border-[3px] border-blue-500"
@@ -142,6 +143,9 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
                     if (isClickableDirection && data.onDirectionClick && !data.isLoading) {
                         e.stopPropagation();
                         data.onDirectionClick();
+                    } else if (data.onNodeClick) {
+                        // Explicitly call node click handler for dismissal/selection
+                        data.onNodeClick();
                     }
                 }}
             >
@@ -165,42 +169,40 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
                     </svg>
                 )}
 
+                {/* Notification Dot for unread nodes OR beacon active (Center Dot) */}
+
+                {(data.isBeaconActive) && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 z-20 pointer-events-none">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 shadow-sm border border-white"></span>
+                    </span>
+                )}
+
                 {/* Target Handle - not needed for root node (has no parent) */}
                 {!data.isRoot && (
                     <Handle type="target" position={targetPosition || Position.Top} className="!bg-slate-400" />
                 )}
 
-                {/* Loading animation - Full Status Line replacement */}
-                {data.isLoading && !isClickableDirection ? (
-                    <div className="flex items-center">
-                        <StatusLine
-                            status="exploring"
-                            title="Exploring"
-                            subtitle={data.label}
-                            className="scale-90 origin-left"
-                        />
+                {/* Node Content */}
+                <>
+                    {/* Node label */}
+                    <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
+                        {data.label}
                     </div>
-                ) : (
-                    <>
-                        {/* Node label */}
-                        <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
-                            {data.label}
-                        </div>
 
-                        {/* Explore icon for direction nodes - on right inside node */}
-                        {isClickableDirection && (
-                            <div className={`
-                                flex-shrink-0 w-5 h-5 ml-1 transition-all duration-200
-                                ${data.isLoading
-                                    ? 'text-blue-500 animate-spin-pulse'
-                                    : 'text-blue-400 hover:text-blue-600 hover:scale-110 active:scale-95 active:text-blue-700'
-                                }
-                            `}>
-                                <Compass className="w-full h-full" strokeWidth={2} />
-                            </div>
-                        )}
-                    </>
-                )}
+                    {/* Explore icon for direction nodes - on right inside node */}
+                    {isClickableDirection && (
+                        <div className={`
+                            flex-shrink-0 w-5 h-5 ml-1 transition-all duration-200
+                            ${data.isLoading
+                                ? 'text-blue-500 animate-spin-pulse'
+                                : 'text-blue-400 hover:text-blue-600 hover:scale-110 active:scale-95 active:text-blue-700'
+                            }
+                        `}>
+                            <Compass className="w-full h-full" strokeWidth={2} />
+                        </div>
+                    )}
+                </>
 
                 {/* Source Handle for nodes WITHOUT children (leaf nodes) */}
                 {!data.hasChildren && (
@@ -209,7 +211,7 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
             </div>
 
             {/* Floating expand/collapse chevron OUTSIDE the node - with source Handle inside */}
-            {data.hasChildren && !data.isLoading && (
+            {data.hasChildren && (
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
