@@ -8,7 +8,7 @@ import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import { StatusLine } from '@/components/ui/status-line';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { cn } from '@/lib/utils';
-import { TreviBriefCard } from '@/components/chat/trevi-brief-card';
+import { GistCard } from '@/components/chat/gist-card';
 import { getBibliography, fetchTreviBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 
@@ -67,7 +67,7 @@ export function ChatSidebar({
     onBriefCacheUpdate,
 }: ChatSidebarProps) {
     const [inputValue, setInputValue] = useState('');
-    const [showBrief, setShowBrief] = useState(false);
+    const [showGist, setShowGist] = useState(false);
     const [activeTab, setActiveTab] = useState<TabType>('thread');
     const [width, setWidth] = useState(MIN_WIDTH);
     const [isResizing, setIsResizing] = useState(false);
@@ -92,11 +92,11 @@ export function ChatSidebar({
             // BUT, if I switch to a new node that doesn't have a brief, showing an empty brief might be annoying?
             // The prompt says "When clicked on brief in sidebar it should automatically update on the modal".
             // It doesn't strictly say "openness" is synced, but "update".
-            // Let's keep `showBrief` local for now, but ensure data syncs.
+            // Let's keep `showGist` local for now, but ensure data syncs.
             // Correction: The prompt says "black ones... should not be visible or open".
             // So for root nodes, force close.
             const isRoot = conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
-            if (isRoot) setShowBrief(false);
+            if (isRoot) setShowGist(false);
         }
     }, [activeNodeId, conversationNodes]);
 
@@ -332,7 +332,7 @@ export function ChatSidebar({
                             {!isRootNode && (
                                 <button
                                     onClick={() => {
-                                        const newState = !showBrief;
+                                        const newState = !showGist;
 
                                         // If opening brief for the first time and no data, fetch it
                                         if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
@@ -366,7 +366,7 @@ export function ChatSidebar({
                                             });
                                         }
 
-                                        setShowBrief(newState);
+                                        setShowGist(newState);
                                         if (newState) {
                                             // Auto-resize to MAXIMUM allowed width when opening brief
                                             const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
@@ -382,11 +382,11 @@ export function ChatSidebar({
                                             ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                             : briefData
                                                 ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                                : showBrief
+                                                : showGist
                                                     ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                                     : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
                                     )}
-                                    title={isBriefLoading ? "Generating..." : briefData ? "Brief Generated" : showBrief ? "Close Brief" : "View Trevi Brief"}
+                                    title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                                 >
                                     {isBriefLoading ? (
                                         <motion.span
@@ -400,19 +400,19 @@ export function ChatSidebar({
                                         <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                                     ) : (
                                         <motion.span
-                                            animate={{ rotate: showBrief ? 45 : 0 }}
+                                            animate={{ rotate: showGist ? 45 : 0 }}
                                             transition={{ type: "spring", stiffness: 260, damping: 20 }}
                                             className="flex items-center justify-center font-bold"
                                         >
                                             <Sparkle
                                                 className={cn(
                                                     "w-3.5 h-3.5 transition-colors duration-200",
-                                                    showBrief ? "fill-blue-600" : "fill-blue-500"
+                                                    showGist ? "fill-blue-600" : "fill-blue-500"
                                                 )}
                                             />
                                         </motion.span>
                                     )}
-                                    <span>Brief</span>
+                                    <span>Gist</span>
                                 </button>
                             )}
                         </div>
@@ -424,7 +424,7 @@ export function ChatSidebar({
 
                     {/* Trevi Brief Section (Shifts content down) */}
                     <AnimatePresence>
-                        {showBrief && (
+                        {showGist && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: "auto", opacity: 1 }}
@@ -432,10 +432,10 @@ export function ChatSidebar({
                                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                 className="flex-shrink-0 w-full min-w-0 overflow-hidden z-10 bg-slate-50/50 shadow-sm relative border-b border-blue-100"
                             >
-                                <TreviBriefCard
+                                <GistCard
                                     nodeLabel={currentTitle || "Thread Summary"}
                                     onClose={() => {
-                                        setShowBrief(false);
+                                        setShowGist(false);
                                         setWidth(MIN_WIDTH); // Auto-shrink on close
                                     }}
                                     className="border-none"

@@ -10,7 +10,7 @@ import { StatusLine } from '@/components/ui/status-line';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { cn } from '@/lib/utils';
-import { TreviBriefCard } from '@/components/chat/trevi-brief-card';
+import { GistCard } from '@/components/chat/gist-card';
 
 interface NodeConversationPanelProps {
     isOpen: boolean;
@@ -54,7 +54,7 @@ export function NodeConversationPanel({
     const panelRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const [inputValue, setInputValue] = useState('');
-    const [showBrief, setShowBrief] = useState(false);
+    const [showGist, setShowGist] = useState(false);
 
     // Trevi Brief states - derived from cache
     const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
@@ -65,7 +65,7 @@ export function NodeConversationPanel({
     // Reset showBrief when switching nodes in modal
     React.useEffect(() => {
         if (nodeId) {
-            if (isRootNode) setShowBrief(false);
+            if (isRootNode) setShowGist(false);
         }
     }, [nodeId, isRootNode]);
 
@@ -88,10 +88,10 @@ export function NodeConversationPanel({
 
     // Focus input when panel opens
     useEffect(() => {
-        if (isOpen && !showBrief && inputRef.current) {
+        if (isOpen && !showGist && inputRef.current) {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen, showBrief]);
+    }, [isOpen, showGist]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -118,7 +118,7 @@ export function NodeConversationPanel({
                         <>
                             <button
                                 onClick={() => {
-                                    const newState = !showBrief;
+                                    const newState = !showGist;
 
                                     // If opening brief for the first time and no data, fetch it
                                     if (newState && !briefData && !isBriefLoading && chatId && nodeId) {
@@ -150,7 +150,7 @@ export function NodeConversationPanel({
                                         });
                                     }
 
-                                    setShowBrief(newState);
+                                    setShowGist(newState);
                                 }}
                                 className={cn(
                                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
@@ -158,11 +158,11 @@ export function NodeConversationPanel({
                                         ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                         : briefData
                                             ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                            : showBrief
+                                            : showGist
                                                 ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                                 : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
                                 )}
-                                title={isBriefLoading ? "Generating..." : briefData ? "Brief Generated" : showBrief ? "Close Brief" : "View Trevi Brief"}
+                                title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                             >
                                 {isBriefLoading ? (
                                     <motion.span
@@ -177,7 +177,7 @@ export function NodeConversationPanel({
                                 ) : (
                                     <Sparkle className="w-3.5 h-3.5 fill-blue-500" />
                                 )}
-                                <span>Brief</span>
+                                <span>Gist</span>
                             </button>
 
                             <div className="w-px h-4 bg-slate-200 mx-1" />
@@ -204,7 +204,7 @@ export function NodeConversationPanel({
 
                 {/* Trevi Brief Section (Shifts content down) */}
                 <AnimatePresence>
-                    {showBrief && (
+                    {showGist && (
                         <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
@@ -212,9 +212,9 @@ export function NodeConversationPanel({
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
                             className="flex-shrink-0 w-full min-w-0 overflow-hidden z-10 bg-white shadow-sm relative border-b border-blue-100"
                         >
-                            <TreviBriefCard
+                            <GistCard
                                 nodeLabel={nodeLabel || "Current Topic"}
-                                onClose={() => setShowBrief(false)}
+                                onClose={() => setShowGist(false)}
                                 className="border-none"
                                 isLoading={isBriefLoading}
                                 briefData={briefData}
@@ -310,7 +310,7 @@ export function NodeConversationModal({
     const modalRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const [inputValue, setInputValue] = useState('');
-    const [showBrief, setShowBrief] = useState(false);
+    const [showGist, setShowGist] = useState(false);
 
     // Trevi Brief states - derived from cache
     const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
@@ -321,7 +321,7 @@ export function NodeConversationModal({
     // Reset showBrief when switching nodes in modal
     React.useEffect(() => {
         if (nodeId) {
-            if (isRootNode) setShowBrief(false);
+            if (isRootNode) setShowGist(false);
         }
     }, [nodeId, isRootNode]);
 
@@ -353,10 +353,10 @@ export function NodeConversationModal({
 
     // Focus input when modal opens
     useEffect(() => {
-        if (isOpen && !showBrief && inputRef.current) {
+        if (isOpen && !showGist && inputRef.current) {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen, showBrief]);
+    }, [isOpen, showGist]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -400,7 +400,7 @@ export function NodeConversationModal({
                             <>
                                 <button
                                     onClick={() => {
-                                        const newState = !showBrief;
+                                        const newState = !showGist;
 
                                         // If opening brief for the first time and no data, fetch it
                                         if (newState && !briefData && !isBriefLoading && chatId && nodeId) {
@@ -432,7 +432,7 @@ export function NodeConversationModal({
                                             });
                                         }
 
-                                        setShowBrief(newState);
+                                        setShowGist(newState);
                                     }}
                                     className={cn(
                                         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
@@ -440,11 +440,11 @@ export function NodeConversationModal({
                                             ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                             : briefData
                                                 ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                                : showBrief
+                                                : showGist
                                                     ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                                     : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
                                     )}
-                                    title={isBriefLoading ? "Generating..." : briefData ? "Brief Generated" : showBrief ? "Close Brief" : "View Trevi Brief"}
+                                    title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                                 >
                                     {isBriefLoading ? (
                                         <motion.span
@@ -458,19 +458,19 @@ export function NodeConversationModal({
                                         <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                                     ) : (
                                         <motion.span
-                                            animate={{ rotate: showBrief ? 45 : 0 }}
+                                            animate={{ rotate: showGist ? 45 : 0 }}
                                             transition={{ type: "spring", stiffness: 260, damping: 20 }}
                                             className="flex items-center justify-center font-bold"
                                         >
                                             <Sparkle
                                                 className={cn(
                                                     "w-3.5 h-3.5 transition-colors duration-200",
-                                                    showBrief ? "fill-blue-600" : "fill-blue-500"
+                                                    showGist ? "fill-blue-600" : "fill-blue-500"
                                                 )}
                                             />
                                         </motion.span>
                                     )}
-                                    <span>Brief</span>
+                                    <span>Gist</span>
                                 </button>
 
                                 <div className="w-px h-5 bg-slate-200 mx-1" />
@@ -497,7 +497,7 @@ export function NodeConversationModal({
 
                     {/* Trevi Brief Section (Shifts content down) */}
                     <AnimatePresence>
-                        {showBrief && (
+                        {showGist && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: "auto", opacity: 1 }}
@@ -505,9 +505,9 @@ export function NodeConversationModal({
                                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
                                 className="flex-shrink-0 overflow-hidden z-10 bg-white shadow-sm relative border-b border-blue-100"
                             >
-                                <TreviBriefCard
+                                <GistCard
                                     nodeLabel={nodeLabel || "Current Topic"}
-                                    onClose={() => setShowBrief(false)}
+                                    onClose={() => setShowGist(false)}
                                     className="border-none"
                                     isLoading={isBriefLoading}
                                     briefData={briefData}

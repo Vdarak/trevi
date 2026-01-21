@@ -7,7 +7,7 @@ import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { motion } from 'framer-motion';
 import type { TreviBriefResponse } from '@/lib/api';
 
-interface TreviBriefCardProps {
+interface GistCardProps {
     nodeLabel: string;
     onClose: () => void;
     className?: string;
@@ -38,7 +38,7 @@ function LoadingDots() {
     );
 }
 
-export function TreviBriefCard({ nodeLabel, onClose, className, isLoading, briefData }: TreviBriefCardProps) {
+export function GistCard({ nodeLabel, onClose, className, isLoading, briefData }: GistCardProps) {
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
@@ -72,7 +72,7 @@ export function TreviBriefCard({ nodeLabel, onClose, className, isLoading, brief
                     <Sparkle className="w-12 h-12 text-blue-500 fill-blue-500" />
                 </motion.div>
                 <p className="text-sm text-slate-600 font-medium flex items-center">
-                    Trevi is generating brief<LoadingDots />
+                    Generating Gist<LoadingDots />
                 </p>
             </div>
         );
@@ -83,7 +83,7 @@ export function TreviBriefCard({ nodeLabel, onClose, className, isLoading, brief
         return (
             <div className={cn("flex flex-col items-center justify-center w-full max-w-full bg-slate-50 border-b border-blue-100 p-12", className)}>
                 <Sparkle className="w-12 h-12 text-slate-300 mb-4" />
-                <p className="text-sm text-slate-400 font-medium">No brief available</p>
+                <p className="text-sm text-slate-400 font-medium">No Gist available</p>
             </div>
         );
     }
