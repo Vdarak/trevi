@@ -87,6 +87,7 @@ export interface ConceptNodeData {
     onNodeClick?: () => void;
     onExpand?: () => void;
     onCloseExpanded?: () => void;
+    onDelete?: () => void;
 }
 
 export interface ConversationPanelNodeData {

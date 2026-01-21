@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { Compass } from 'lucide-react';
+import { Compass, X } from 'lucide-react';
 import { ConceptNodeData } from '../types';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 
@@ -112,7 +112,31 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
     };
 
     return (
-        <div className={`relative ${isHorizontal ? 'flex items-center' : 'flex flex-col items-center'}`}>
+        <div className={`relative ${isHorizontal ? 'flex items-center' : 'flex flex-col items-center'} group/node`}>
+
+            {/* Root Delete Button - Left Center */}
+            {data.isRoot && data.onDelete && (
+                <div
+                    className="absolute right-full top-1/2 -translate-y-1/2 pr-3 h-full flex items-center z-50 opacity-0 group-hover/node:opacity-100 transition-opacity duration-200"
+                >
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            data.onDelete?.();
+                        }}
+                        className="
+                            flex items-center justify-center
+                            w-6 h-6 rounded-full
+                            bg-red-500 hover:bg-red-600 text-white
+                            shadow-md hover:shadow-lg
+                            transition-transform duration-200 hover:scale-110 active:scale-95
+                        "
+                        title="Delete this discussion"
+                    >
+                        <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </button>
+                </div>
+            )}
 
 
             {/* Main node box */}

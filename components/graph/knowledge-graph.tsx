@@ -313,6 +313,17 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
         parentId: node.parentId, // Pass parentId for animation
         direction: direction, // Pass direction for floating chevron positioning
         depth: depthMap.get(node.id) || 0, // Pass depth for hierarchy styling
+        // Allow deleting root nodes if there are multiple roots
+        onDelete: (rootIdList.length > 1 && rootIdList.includes(node.id))
+          ? () => {
+            setDeleteConfirmation({
+              isOpen: true,
+              nodeId: node.id,
+              nodeLabel: node.label,
+              status: 'confirm'
+            });
+          }
+          : undefined,
       },
     }));
 
