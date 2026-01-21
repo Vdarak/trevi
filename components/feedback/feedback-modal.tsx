@@ -20,6 +20,9 @@ interface FeedbackData {
     navigationEase: LikertValue;
     visualClarity: LikertValue;
     learningEffectiveness: LikertValue;
+    gistContentUseful: LikertValue;
+    gistContentAccurate: LikertValue;
+    layoutUsable: LikertValue;
     qualitativeFeedback: string;
     improvementSuggestion: string;
 }
@@ -37,6 +40,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         navigationEase: null,
         visualClarity: null,
         learningEffectiveness: null,
+        gistContentUseful: null,
+        gistContentAccurate: null,
+        layoutUsable: null,
         qualitativeFeedback: '',
         improvementSuggestion: '',
     });
@@ -64,6 +70,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 navigation_ease: feedback.navigationEase,
                 visual_clarity: feedback.visualClarity,
                 learning_effectiveness: feedback.learningEffectiveness,
+                gist_content_useful: feedback.gistContentUseful,
+                gist_content_accurate: feedback.gistContentAccurate,
+                layout_usable: feedback.layoutUsable,
                 qualitative_feedback: feedback.qualitativeFeedback,
                 improvement_suggestion: feedback.improvementSuggestion,
             };
@@ -91,6 +100,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             navigationEase: null,
             visualClarity: null,
             learningEffectiveness: null,
+            gistContentUseful: null,
+            gistContentAccurate: null,
+            layoutUsable: null,
             qualitativeFeedback: '',
             improvementSuggestion: '',
         });
@@ -186,6 +198,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             {renderLikertScale('navigationEase', 'Navigating the graph was straightforward.')}
             {renderLikertScale('visualClarity', 'The visual design helped me focus.')}
             {renderLikertScale('learningEffectiveness', 'This tool helps me learn effectively.')}
+            {renderLikertScale('gistContentUseful', 'Was trevi gist content useful?')}
+            {renderLikertScale('gistContentAccurate', 'Was trevi gist content accurate?')}
+            {renderLikertScale('layoutUsable', 'Was the trevi gist layout usable?')}
         </div>,
 
         // Step 1: Subjective/Qualitative Questions

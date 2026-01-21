@@ -301,12 +301,57 @@ function HomeContent() {
           connectionManagerRef.current.complete(currentNodeId);
           localStorage.removeItem(`trevi-followup-${currentChatId}`);
 
-          setCurrentNodeId(event.node_id);
-
           getGraph(event.chat_id)
             .then((graphResponse) => {
               const { nodes } = buildGraphNodesFromResponse(graphResponse);
-              setGraphNodes(nodes);
+
+              // SAFETY: Ensure the new node exists in the graph (optimistic update if backend is lagging)
+              if (!nodes.find(n => n.id === event.node_id)) {
+                console.warn("New node missing from graph fetch (sidebar follow-up), patching locally:", event.node_id);
+                // Patch conversation node
+                nodes.push({
+                  id: event.node_id,
+                  label: event.label,
+                  summary: event.summary,
+                  parentId: event.parent_node_id === "root" ? null : event.parent_node_id,
+                  isDirection: false,
+                  payload: event.payload,
+                  citations: event.citations,
+                });
+
+                // Patch direction nodes from event
+                if (event.direction_nodes) {
+                  event.direction_nodes.forEach(dn => {
+                    if (!nodes.find(n => n.id === dn.node_id)) {
+                      nodes.push({
+                        id: dn.node_id,
+                        label: dn.label,
+                        summary: dn.summary,
+                        parentId: event.node_id,
+                        isDirection: true,
+                      });
+                    }
+                  });
+                }
+              }
+
+              // STRICT DEDUPLICATION: Ensure no duplicate IDs exist
+              const uniqueNodes = Array.from(
+                new Map(nodes.map(node => [node.id, node])).values()
+              );
+
+              setGraphNodes(uniqueNodes);
+
+              // CRITICAL: Use the current node from the API response as the source of truth
+              if (graphResponse.current_node) {
+                setCurrentNodeId(graphResponse.current_node);
+              } else {
+                setCurrentNodeId(event.node_id);
+              }
+
+              // Update unread nodes with the confirmed current node
+              const unreadId = graphResponse.current_node || event.node_id;
+              setUnreadNodeIds(new Set([unreadId]));
             })
             .catch(console.error);
 
@@ -521,11 +566,7 @@ function HomeContent() {
             if (currentChatIdRef.current !== currentChatId) return;
 
             // Mark as UNREAD
-            setUnreadNodeIds(prev => {
-              const next = new Set(prev);
-              next.add(event.node_id);
-              return next;
-            });
+            setUnreadNodeIds(new Set([event.node_id]));
 
             getGraph(event.chat_id)
               .then((graphResponse) => {
@@ -652,11 +693,7 @@ function HomeContent() {
             if (currentChatIdRef.current !== currentChatId) return;
 
             // Mark as UNREAD if it's a new node (though follow-ups often return same or new child)
-            setUnreadNodeIds(prev => {
-              const next = new Set(prev);
-              next.add(event.node_id);
-              return next;
-            });
+            setUnreadNodeIds(new Set([event.node_id]));
 
             getGraph(event.chat_id)
               .then((graphResponse) => {
@@ -777,6 +814,9 @@ function HomeContent() {
     // Check if this specific node is already loading for this chat
     if (connectionManagerRef.current.isLoading(nodeId, chatId)) return;
 
+    // IMMEDIATE UPDATE: Set current node to the direction node to force path highlighting
+    setCurrentNodeId(nodeId);
+
     // Get node and parent labels for formatted explore message
     const clickedNode = graphNodes.find(n => n.id === nodeId);
     const nodeLabel = clickedNode?.label || 'topic';
@@ -829,9 +869,7 @@ function HomeContent() {
             // Still mark as unread so they see it when they return
             // We can't update state directly if component unmounted/switched context easily, 
             // but we can update localStorage directly for that chat
-            const savedUnread = localStorage.getItem(`trevi-unread-${chatId}`);
-            const unreadSet = savedUnread ? new Set(JSON.parse(savedUnread)) : new Set();
-            unreadSet.add(event.node_id);
+            const unreadSet = new Set([event.node_id]);
             localStorage.setItem(`trevi-unread-${chatId}`, JSON.stringify(Array.from(unreadSet)));
             return;
           }
@@ -897,11 +935,7 @@ function HomeContent() {
 
               // Update unread nodes with the confirmed current node
               const unreadId = graphResponse.current_node || event.node_id;
-              setUnreadNodeIds(prev => {
-                const next = new Set(prev);
-                next.add(unreadId);
-                return next;
-              });
+              setUnreadNodeIds(new Set([unreadId]));
             })
             .catch((fetchError) => {
               // Only show error if still on same chat
@@ -1001,6 +1035,9 @@ function HomeContent() {
   const handleNodeMessage = useCallback(async (nodeId: string, message: string) => {
     if (!currentChatId || isNodeStreaming) return;
 
+    // IMMEDIATE UPDATE: Set current node to query node to force path highlighting
+    setCurrentNodeId(nodeId);
+
     setIsNodeStreaming(true);
     setNodeStatusMessage(message);
     setProcessingQuery(message);
@@ -1081,11 +1118,7 @@ function HomeContent() {
 
               // Update unread nodes with the confirmed current node
               const unreadId = graphResponse.current_node || event.node_id;
-              setUnreadNodeIds(prev => {
-                const next = new Set(prev);
-                next.add(unreadId);
-                return next;
-              });
+              setUnreadNodeIds(new Set([unreadId]));
             })
             .catch((err) => {
               console.error("Failed to refresh graph:", err);

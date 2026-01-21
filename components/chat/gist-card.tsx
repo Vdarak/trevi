@@ -100,7 +100,7 @@ export function GistCard({ nodeLabel, onClose, className, isLoading, briefData }
                 <div className="min-w-[320px] w-[320px] flex-shrink-0 snap-center bg-white rounded-xl border border-blue-200 shadow-sm p-4 flex flex-col relative overflow-hidden">
                     <h3 className="relative text-xs font-bold text-blue-600 mb-3 pb-2 border-b border-slate-100">Summary</h3>
                     <div className="relative text-xs text-slate-900 leading-relaxed overflow-y-auto max-h-[180px] scrollbar-thin">
-                        <MarkdownRenderer content={briefData.tldr} />
+                        <MarkdownRenderer content={briefData.tldr.map(item => `- ${item}`).join('\n')} />
                     </div>
                 </div>
 
@@ -114,7 +114,7 @@ export function GistCard({ nodeLabel, onClose, className, isLoading, briefData }
                             {nodeTitle}
                         </h4>
                         <div className="flex-1 text-xs text-slate-900 leading-relaxed overflow-y-auto max-h-[160px] scrollbar-thin">
-                            <MarkdownRenderer content={summary} />
+                            <MarkdownRenderer content={summary.map(item => `- ${item}`).join('\n')} />
                         </div>
                     </div>
                 ))}

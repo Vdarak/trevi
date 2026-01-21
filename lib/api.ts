@@ -184,8 +184,8 @@ export interface TreviBriefResponse {
   chat_id: string;
   node_id: string;
   trevi_brief: {
-    tldr: string;
-    node_summaries: Record<string, string>; // Node label -> Summary text
+    tldr: string[];
+    node_summaries: Record<string, string[]>; // Node label -> Summary text bullets
     key_topics: string[];
   };
 }

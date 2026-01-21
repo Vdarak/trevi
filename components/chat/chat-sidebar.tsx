@@ -165,13 +165,22 @@ export function ChatSidebar({
         return conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
     }, [activeNodeId, conversationNodes]);
 
-    // Auto-scroll to active node or top (but NOT when streaming - let bottom scroll take over)
+    // Auto-scroll to active node or top/bottom
     useEffect(() => {
         if (isStreaming) return; // Don't interfere with streaming scroll
         const timeoutId = setTimeout(() => {
             if (activeNodeId && nodeRefs.current.has(activeNodeId)) {
+                // Scenario A: Node exists in list - Scroll to it
                 nodeRefs.current.get(activeNodeId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (activeNodeId) {
+                // Scenario B: Node is active (e.g. Exploring/Follow-up) but not in list (e.g. empty payload)
+                // Scroll to BOTTOM to show the parent context (last rendered node) + any loading indicators
+                messagesContainerRef.current?.scrollTo({
+                    top: messagesContainerRef.current?.scrollHeight || 0,
+                    behavior: 'smooth'
+                });
             } else {
+                // Scenario C: No active node - Scroll to top
                 messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }, 150);
