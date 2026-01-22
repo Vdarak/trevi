@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
+        source: '/mkc/:path*',
         destination: `${backendUrl}/:path*`,
       },
     ];
