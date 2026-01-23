@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check } from 'lucide-react';
+import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check, Download } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
@@ -9,7 +9,7 @@ import { StatusLine } from '@/components/ui/status-line';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
-import { getBibliography, fetchTreviBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
+import { getBibliography, fetchTreviBrief, downloadBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 
 interface ConversationNode {
@@ -339,90 +339,115 @@ export function ChatSidebar({
 
                             {/* Trevi Brief Toggle - hidden for root nodes */}
                             {!isRootNode && (
-                                <button
-                                    onClick={() => {
-                                        const newState = !showGist;
+                                <div className="flex items-center">
+                                    {/* Download Button - animated reveal when Gist is open */}
+                                    <AnimatePresence>
+                                        {showGist && (
+                                            <motion.button
+                                                initial={{ scale: 0, opacity: 0 }}
+                                                animate={{ scale: 1, opacity: 1 }}
+                                                exit={{ scale: 0, opacity: 0 }}
+                                                transition={{ duration: 0.15, ease: "easeOut" }}
+                                                onClick={() => {
+                                                    if (chatId && activeNodeId) {
+                                                        downloadBrief(chatId, activeNodeId).catch((err) => {
+                                                            console.error('Download failed:', err);
+                                                        });
+                                                    }
+                                                }}
+                                                className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
+                                                title="Download Brief as PDF"
+                                            >
+                                                <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                            </motion.button>
+                                        )}
+                                    </AnimatePresence>
+                                    <button
+                                        onClick={() => {
+                                            const newState = !showGist;
 
-                                        // If opening brief for the first time and no data, fetch it
-                                        if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
-                                            // Set loading state in cache immediately
-                                            onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: true });
+                                            // If opening brief for the first time and no data, fetch it
+                                            if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
+                                                // Set loading state in cache immediately
+                                                onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: true });
 
-                                            // Create AbortController for cleanup
-                                            const controller = new AbortController();
-                                            briefConnectionRef.current = controller;
+                                                // Create AbortController for cleanup
+                                                const controller = new AbortController();
+                                                briefConnectionRef.current = controller;
 
-                                            fetchTreviBrief(
-                                                chatId,
-                                                activeNodeId,
-                                                undefined, // No progressive updates for now
-                                                (response) => {
-                                                    // Update parent cache with data
-                                                    onBriefCacheUpdate?.(activeNodeId, { data: response.trevi_brief, isLoading: false });
-                                                },
-                                                (error) => {
-                                                    console.error('Trevi Brief error:', error);
-                                                    // Update parent cache with error
-                                                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: error.error });
-                                                },
-                                                { signal: controller.signal }
-                                            ).catch((err) => {
-                                                // Handle abort or other errors
-                                                if (err.name !== 'AbortError') {
-                                                    console.error('Trevi Brief fetch failed:', err);
-                                                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
-                                                }
-                                            });
-                                        }
+                                                fetchTreviBrief(
+                                                    chatId,
+                                                    activeNodeId,
+                                                    undefined, // No progressive updates for now
+                                                    (response) => {
+                                                        // Update parent cache with data
+                                                        onBriefCacheUpdate?.(activeNodeId, { data: response.trevi_brief, isLoading: false });
+                                                    },
+                                                    (error) => {
+                                                        console.error('Trevi Brief error:', error);
+                                                        // Update parent cache with error
+                                                        onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: error.error });
+                                                    },
+                                                    { signal: controller.signal }
+                                                ).catch((err) => {
+                                                    // Handle abort or other errors
+                                                    if (err.name !== 'AbortError') {
+                                                        console.error('Trevi Brief fetch failed:', err);
+                                                        onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
+                                                    }
+                                                });
+                                            }
 
-                                        setShowGist(newState);
-                                        if (newState) {
-                                            // Auto-resize to MAXIMUM allowed width when opening brief
-                                            const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
-                                            setWidth(maxWidth);
-                                        } else {
-                                            // Optional: Shrink back? User requested: "when trevi brief is closed, automatically resize the chat side bar to minimum width"
-                                            setWidth(MIN_WIDTH);
-                                        }
-                                    }}
-                                    className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
-                                        isBriefLoading
-                                            ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                            : briefData
-                                                ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                                : showGist
-                                                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                                    : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
-                                    )}
-                                    title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
-                                >
-                                    {isBriefLoading ? (
-                                        <motion.span
-                                            animate={{ rotate: 360 }}
-                                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                            className="flex items-center justify-center"
-                                        >
-                                            <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
-                                        </motion.span>
-                                    ) : briefData ? (
-                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                                    ) : (
-                                        <motion.span
-                                            animate={{ rotate: showGist ? 45 : 0 }}
-                                            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                                            className="flex items-center justify-center font-bold"
-                                        >
-                                            <Sparkle
-                                                className={cn(
-                                                    "w-3.5 h-3.5 transition-colors duration-200",
-                                                    showGist ? "fill-blue-600" : "fill-blue-500"
-                                                )}
-                                            />
-                                        </motion.span>
-                                    )}
-                                    <span>Gist</span>
-                                </button>
+                                            setShowGist(newState);
+                                            if (newState) {
+                                                // Auto-resize to MAXIMUM allowed width when opening brief
+                                                const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
+                                                setWidth(maxWidth);
+                                            } else {
+                                                // Optional: Shrink back? User requested: "when trevi brief is closed, automatically resize the chat side bar to minimum width"
+                                                setWidth(MIN_WIDTH);
+                                            }
+                                        }}
+                                        className={cn(
+                                            "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
+                                            showGist ? "rounded-r-lg" : "rounded-lg",
+                                            isBriefLoading
+                                                ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                : briefData
+                                                    ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
+                                                    : showGist
+                                                        ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                        : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                        )}
+                                        title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
+                                    >
+                                        {isBriefLoading ? (
+                                            <motion.span
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                                className="flex items-center justify-center"
+                                            >
+                                                <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
+                                            </motion.span>
+                                        ) : briefData ? (
+                                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        ) : (
+                                            <motion.span
+                                                animate={{ rotate: showGist ? 45 : 0 }}
+                                                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                                                className="flex items-center justify-center font-bold"
+                                            >
+                                                <Sparkle
+                                                    className={cn(
+                                                        "w-3.5 h-3.5 transition-colors duration-200",
+                                                        showGist ? "fill-blue-600" : "fill-blue-500"
+                                                    )}
+                                                />
+                                            </motion.span>
+                                        )}
+                                        <span>Gist</span>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     )}
@@ -693,7 +718,7 @@ export function ChatSidebar({
                         </div>
                     </form>
                 </footer>
-            </div>
+            </div >
         </>
     );
 }

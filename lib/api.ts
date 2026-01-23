@@ -884,3 +884,35 @@ export async function fetchTreviBrief(
     throw error;
   }
 }
+
+/**
+ * Downloads the Trevi Brief as a PDF for a specific node.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID to download brief for
+ * 
+ * @example
+ * await downloadBrief("chat-123", "node-456");
+ */
+export async function downloadBrief(chatId: string, nodeId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/download-brief`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, node_id: nodeId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trevi_brief_${nodeId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { X, Send, Sparkle, Check } from 'lucide-react';
+import { X, Send, Sparkle, Check, Download } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { MessagePayload, Citation, TreviBriefResponse } from '@/lib/api';
-import { fetchTreviBrief } from '@/lib/api';
+import { fetchTreviBrief, downloadBrief } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 import { StatusLine } from '@/components/ui/status-line';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
@@ -115,7 +115,29 @@ export function NodeConversationPanel({
                 </h3>
                 <div className="flex items-center gap-1 flex-shrink-0">
                     {!isRootNode && (
-                        <>
+                        <div className="flex items-center">
+                            {/* Download Button - animated reveal when Gist is open */}
+                            <AnimatePresence>
+                                {showGist && (
+                                    <motion.button
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        exit={{ scale: 0, opacity: 0 }}
+                                        transition={{ duration: 0.15, ease: "easeOut" }}
+                                        onClick={() => {
+                                            if (chatId && nodeId) {
+                                                downloadBrief(chatId, nodeId).catch((err) => {
+                                                    console.error('Download failed:', err);
+                                                });
+                                            }
+                                        }}
+                                        className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
+                                        title="Download Brief as PDF"
+                                    >
+                                        <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
                             <button
                                 onClick={() => {
                                     const newState = !showGist;
@@ -153,7 +175,8 @@ export function NodeConversationPanel({
                                     setShowGist(newState);
                                 }}
                                 className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
+                                    "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
+                                    showGist ? "rounded-r-lg" : "rounded-lg",
                                     isBriefLoading
                                         ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                         : briefData
@@ -179,9 +202,8 @@ export function NodeConversationPanel({
                                 )}
                                 <span>Gist</span>
                             </button>
-
                             <div className="w-px h-4 bg-slate-200 mx-1" />
-                        </>
+                        </div>
                     )}
 
                     <QuickFeedback
@@ -395,9 +417,30 @@ export function NodeConversationModal({
                         {nodeLabel || 'Conversation'}
                     </h3>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                        {/* Trevi Brief Toggle - hidden for root nodes */}
                         {!isRootNode && (
-                            <>
+                            <div className="flex items-center">
+                                {/* Download Button - animated reveal when Gist is open */}
+                                <AnimatePresence>
+                                    {showGist && (
+                                        <motion.button
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 0, opacity: 0 }}
+                                            transition={{ duration: 0.15, ease: "easeOut" }}
+                                            onClick={() => {
+                                                if (chatId && nodeId) {
+                                                    downloadBrief(chatId, nodeId).catch((err) => {
+                                                        console.error('Download failed:', err);
+                                                    });
+                                                }
+                                            }}
+                                            className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
+                                            title="Download Brief as PDF"
+                                        >
+                                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                        </motion.button>
+                                    )}
+                                </AnimatePresence>
                                 <button
                                     onClick={() => {
                                         const newState = !showGist;
@@ -435,7 +478,8 @@ export function NodeConversationModal({
                                         setShowGist(newState);
                                     }}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 border text-xs font-semibold select-none",
+                                        "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
+                                        showGist ? "rounded-r-lg" : "rounded-lg",
                                         isBriefLoading
                                             ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
                                             : briefData
@@ -472,9 +516,8 @@ export function NodeConversationModal({
                                     )}
                                     <span>Gist</span>
                                 </button>
-
                                 <div className="w-px h-5 bg-slate-200 mx-1" />
-                            </>
+                            </div>
                         )}
 
                         <QuickFeedback
