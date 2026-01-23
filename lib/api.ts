@@ -2,9 +2,10 @@
  * API Configuration
  * 
  * Base URL for the Trevi backend API.
- * Change this value when deploying to different environments.
+ * - Local dev: Uses "/proxy" (Next.js rewrites to backend)
+ * - Production: Uses "" (ALB routes /api/sessions/* directly to backend)
  */
-export const API_BASE_URL = "/proxy";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/proxy";
 
 /**
  * Default fetch options for all API calls.
