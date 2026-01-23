@@ -4,7 +4,7 @@
  * Base URL for the Trevi backend API.
  * Change this value when deploying to different environments.
  */
-export const API_BASE_URL = "/mkc";
+export const API_BASE_URL = "/proxy";
 
 /**
  * Default fetch options for all API calls.

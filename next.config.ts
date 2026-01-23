@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/mkc/:path*',
+        source: '/proxy/:path*',
         destination: `${backendUrl}/:path*`,
       },
     ];
