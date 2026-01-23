@@ -4,7 +4,7 @@
  * Base URL for the Trevi backend API.
  * Change this value when deploying to different environments.
  */
-export const API_BASE_URL = "/proxy";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
 /**
  * Default fetch options for all API calls.
