@@ -9,6 +9,7 @@ import type { BriefState } from '@/components/graph/types';
 import { StatusLine } from '@/components/ui/status-line';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
+import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
 
@@ -206,6 +207,11 @@ export function NodeConversationPanel({
                         </div>
                     )}
 
+                    <ShareLinkButton
+                        chatId={chatId}
+                        nodeId={nodeId}
+                        size="md"
+                    />
                     <QuickFeedback
                         context="component"
                         componentName="node_panel"
@@ -516,10 +522,14 @@ export function NodeConversationModal({
                                     )}
                                     <span>Gist</span>
                                 </button>
-                                <div className="w-px h-5 bg-slate-200 mx-1" />
                             </div>
                         )}
 
+                        <ShareLinkButton
+                            chatId={chatId}
+                            nodeId={nodeId}
+                            size="lg"
+                        />
                         <QuickFeedback
                             context="component"
                             componentName="node_modal"

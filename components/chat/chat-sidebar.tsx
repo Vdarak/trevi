@@ -7,6 +7,7 @@ import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import { StatusLine } from '@/components/ui/status-line';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
+import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
 import { getBibliography, fetchTreviBrief, downloadBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
@@ -307,7 +308,7 @@ export function ChatSidebar({
                                             ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}
                                         `}
                                     >
-                                        <Icon className="w-6 h-6" />
+                                        <Icon className="w-5 h-5" />
                                         {isActive && <span>{tab.label}</span>}
                                         {isActive && (
                                             <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
@@ -317,6 +318,14 @@ export function ChatSidebar({
                             })}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+                            {activeTab === 'thread' && (
+                                <>
+                                    <ShareLinkButton
+                                        chatId={chatId}
+                                        nodeId={activeNodeId}
+                                    />
+                                </>
+                            )}
                             <QuickFeedback
                                 context="component"
                                 componentName="chat_sidebar"
@@ -327,7 +336,7 @@ export function ChatSidebar({
                                 onClick={onClose}
                                 className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                             >
-                                <X className="w-6 h-6" />
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
                     </div>

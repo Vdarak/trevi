@@ -153,4 +153,121 @@ export function TreviSpinner({ size = 16, className = '' }: { size?: number; cla
   );
 }
 
+/**
+ * Trevi logo that animates in reverse on hover.
+ * Static by default, plays one full reverse animation cycle on hover.
+ * Always completes the animation even if hover ends early.
+ */
+export function TreviLogoHoverable({
+  size = 24,
+  className = '',
+  href = 'https://trevi.fyi'
+}: {
+  size?: number;
+  className?: string;
+  href?: string;
+}) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [isAnimating, setIsAnimating] = React.useState(false);
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = () => {
+    // Don't start new animation if one is already running
+    if (isAnimating) return;
+
+    setIsAnimating(true);
+
+    // Animation completes in 1.5s, then reset
+    animationTimeoutRef.current = setTimeout(() => {
+      setIsAnimating(false);
+    }, 1500);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const content = (
+    <div
+      className={`rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0 cursor-pointer ${className}`}
+      style={{ width: size, height: size }}
+      onMouseEnter={handleMouseEnter}
+    >
+      <svg
+        ref={svgRef}
+        width={size * 0.75}
+        height={size * 0.8}
+        viewBox="-4 -4 42 42"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ overflow: 'visible' }}
+      >
+        <defs>
+          <path
+            id="treviPathHover"
+            d={TREVI_PATH}
+          />
+        </defs>
+
+        {/* Path - animates reveal in reverse on hover */}
+        <path
+          d={TREVI_PATH}
+          stroke="#fff"
+          strokeWidth="3"
+          strokeLinecap="round"
+          fill="none"
+          pathLength="1"
+          strokeDasharray="1"
+          strokeDashoffset={isAnimating ? undefined : 0}
+        >
+          {isAnimating && (
+            <animate
+              attributeName="stroke-dashoffset"
+              values="0; 0.99; 0"
+              keyTimes="0; 0.5; 1"
+              dur="1.5s"
+              fill="freeze"
+              calcMode="spline"
+              keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"
+            />
+          )}
+        </path>
+
+        {/* Ball - travels reverse then back on hover */}
+        {isAnimating ? (
+          <circle r="3" fill="#fff">
+            <animateMotion
+              dur="1.5s"
+              fill="freeze"
+              calcMode="spline"
+              keyTimes="0; 0.5; 1"
+              keyPoints="1; 0; 1"
+              keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"
+            >
+              <mpath href="#treviPathHover" />
+            </animateMotion>
+          </circle>
+        ) : (
+          <circle cx="30.5" cy="9.90391" r="3" fill="#fff" />
+        )}
+      </svg>
+    </div>
+  );
+
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="no-underline">
+        {content}
+      </a>
+    );
+  }
+
+  return content;
+}
+
 export default TreviLogoAnimation;

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { Menu, Map as MapIcon, MessageSquare } from 'lucide-react';
+import { Menu, Network, MessageSquare } from 'lucide-react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
@@ -1261,19 +1261,19 @@ function HomeContent() {
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
             <button
               onClick={() => setMobileActiveTab('graph')}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
+              className={`flex-1 flex items-center justify-center gap-2 py-5 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
                 }`}
             >
-              <MapIcon className="w-5 h-5" />
-              <span className="text-xs font-medium">Graph</span>
+              <Network className="w-5 h-5" />
+              <span className="text-sm font-medium">Tree</span>
             </button>
             <button
               onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
+              className={`flex-1 flex items-center justify-center gap-2 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
                 }`}
             >
               <MessageSquare className="w-5 h-5" />
-              <span className="text-xs font-medium">Chat</span>
+              <span className="text-sm font-medium">Chat</span>
             </button>
           </div>
         )}

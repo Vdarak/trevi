@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import { createPortal } from 'react-dom';
 import { ThumbsUp, ThumbsDown, Copy, Check, X, ArrowUp } from 'lucide-react';
 import { submitFeedback } from '@/lib/api';
+import { copyToClipboard } from '@/lib/clipboard';
 
 // Preset options for different feedback contexts (6 options each including "Other...")
 const PRESETS = {
@@ -253,12 +254,12 @@ export function QuickFeedback({
 
     const handleCopy = async () => {
         if (!copyContent) return;
-        try {
-            await navigator.clipboard.writeText(copyContent);
+        const success = await copyToClipboard(copyContent);
+        if (success) {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        } catch (error) {
-            console.error("Failed to copy:", error);
+        } else {
+            console.error("Failed to copy");
         }
     };
 
@@ -435,7 +436,7 @@ export function InlineResponseFeedback({
             componentName="inline_response"
             nodeId={nodeId}
             popoverPosition="top"
-            size="sm"
+            size="md"
             showCopy={true}
             copyContent={content}
             className={className}

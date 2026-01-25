@@ -12,9 +12,11 @@ interface MessageBubbleProps {
     citations?: Citation[];
     onEdit?: (newContent: string) => void;
     nodeId?: string;
+    /** Hide the feedback buttons (for public share views) */
+    hideFeedback?: boolean;
 }
 
-export function MessageBubble({ role, content, isStreaming, citations, onEdit, nodeId }: MessageBubbleProps) {
+export function MessageBubble({ role, content, isStreaming, citations, onEdit, nodeId, hideFeedback }: MessageBubbleProps) {
     const isUser = role === 'user';
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(content);
@@ -120,8 +122,8 @@ export function MessageBubble({ role, content, isStreaming, citations, onEdit, n
                         <MarkdownRenderer content={content} citations={citations} />
                     </div>
 
-                    {/* Feedback + Copy buttons - Always visible */}
-                    {!isStreaming && (
+                    {/* Feedback + Copy buttons - Always visible (unless hidden) */}
+                    {!isStreaming && !hideFeedback && (
                         <div className="mt-2">
                             <InlineResponseFeedback nodeId={nodeId} content={content} />
                         </div>

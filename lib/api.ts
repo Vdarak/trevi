@@ -917,3 +917,85 @@ export async function downloadBrief(chatId: string, nodeId: string): Promise<voi
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ============================================================================
+// Share API
+// ============================================================================
+
+/** Response from POST /api/sessions/chat/share */
+export interface ShareResponse {
+  share_token: string;
+}
+
+/**
+ * Creates a shareable link for a conversation path from root to specified node.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID to share the path to
+ * @returns Share response with the share token
+ * 
+ * @example
+ * const { share_token } = await shareConversation("chat-123", "node-456");
+ * const shareUrl = `${window.location.origin}/share/${share_token}`;
+ */
+export async function shareConversation(chatId: string, nodeId: string): Promise<ShareResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/share`, {
+    ...defaultOptions,
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify({ chat_id: chatId, node_id: nodeId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to share conversation: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/** Shared chat node from GET /api/sessions/chat/share */
+export interface SharedChatNode {
+  id: string;
+  payload: MessagePayload[];
+  node_label: string;
+  display_summary?: string;
+  type: 'conversation' | 'direction';
+  citations?: Citation[];
+  references?: string[];
+  trevi_brief?: TreviBriefResponse['trevi_brief'];
+}
+
+/** Response from GET /api/sessions/chat/share */
+export interface SharedChatResponse {
+  graph: {
+    nodes: SharedChatNode[];
+    edges?: { source: string; target: string }[];
+    biblio?: Record<string, string[]>; // URL → [node_labels] for bibliography
+  };
+  current_node?: string;
+  gist?: TreviBriefResponse['trevi_brief'];
+}
+
+/**
+ * Fetches a shared chat by share token.
+ * 
+ * @param shareToken - The share token from the URL
+ * @returns Shared chat response with graph nodes
+ * 
+ * @example
+ * const data = await getSharedChat("abc123");
+ * const nodes = data.graph.nodes;
+ */
+export async function getSharedChat(shareToken: string): Promise<SharedChatResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/share?share_token=${encodeURIComponent(shareToken)}`, {
+    ...defaultOptions,
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch shared chat: ${response.statusText}`);
+  }
+
+  return response.json();
+}

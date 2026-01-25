@@ -295,7 +295,7 @@ export function Sidebar({
           </div>
         </div>
 
-        <div className="px-4 py-2 sm:py-4">
+        <div className="px-4 py-4">
           <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
         </div>
 

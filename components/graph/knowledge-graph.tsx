@@ -14,7 +14,7 @@ import {
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { GitBranch, Layers, ArrowDown, ArrowRight, Plus, Minus, Maximize2, PanelRight, Maximize, MessageSquare } from 'lucide-react';
+import { GitBranch, Layers, ArrowDown, ArrowRight, Maximize2, PanelRight, Maximize, MessageSquare } from 'lucide-react';
 import { MessagePayload, Citation } from '@/lib/api';
 import { TreviLogoAnimation, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { NodeConversationPanel, NodeConversationModal } from '@/components/chat/node-conversation-panel';
@@ -85,6 +85,7 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
   const [viewMode, setViewMode] = useState<'panel' | 'modal'>('modal'); // Toggle between panel and modal view
   const [isStatusPillExpanded, setIsStatusPillExpanded] = useState(false); // Toggle for status pill dropdown
   const [statusPillWarning, setStatusPillWarning] = useState<string | undefined>(undefined); // Temporary warning message for status pill
+  const [isTouchDevice, setIsTouchDevice] = useState(false); // Track if user is using touch input
 
   // Delete confirmation modal state
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -107,6 +108,39 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
   useEffect(() => {
     prevChatIdRef.current = chatId;
   }, [chatId]);
+
+  // Detect touch input - disable hover tooltips when user is using touch
+  // This handles hybrid devices (laptops with touchscreens) by detecting actual touch usage
+  useEffect(() => {
+    // Initial check: if pointer is coarse (touch-only) or viewport is small, assume touch device
+    // This catches mobile devices immediately on load
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const isSmallViewport = window.innerWidth < 768; // md breakpoint
+    if (isCoarsePointer || isSmallViewport) {
+      setIsTouchDevice(true);
+    }
+
+    const handleTouchStart = () => {
+      setIsTouchDevice(true);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Only switch to mouse mode if:
+      // 1. It's not a coarse pointer device (pure mobile)
+      // 2. The mouse is actually moving (not just a single synthetic event)
+      if (!window.matchMedia('(pointer: coarse)').matches) {
+        setIsTouchDevice(false);
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
 
   // Start periodic feedback timer when graph has nodes
   useEffect(() => {
@@ -922,7 +956,7 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
 
       {/* Chat Toggle Button - Top Right (hidden on mobile, we have tab navigation) */}
       {onToggleChatSidebar && (
-        <div className="hidden md:block absolute top-4 right-4 z-30 bg-white rounded-lg shadow-md border border-slate-200 p-1">
+        <div className="hidden md:block absolute top-2 right-4 z-30 bg-white rounded-lg shadow-md border border-slate-200 p-1">
           <ToolbarButton
             onClick={onToggleChatSidebar}
             isActive={isChatSidebarOpen}
@@ -1009,20 +1043,8 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
           </ToolbarButton>
         </div>
 
-        {/* Zoom Controls Group */}
+        {/* Fit View Button */}
         <div className="bg-white rounded-lg shadow-md border border-slate-200 p-1 flex flex-col gap-1">
-          <ToolbarButton
-            onClick={() => zoomIn({ duration: 200 })}
-            title="Zoom In"
-          >
-            <Plus className="w-5 h-5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => zoomOut({ duration: 200 })}
-            title="Zoom Out"
-          >
-            <Minus className="w-5 h-5" />
-          </ToolbarButton>
           <ToolbarButton
             onClick={() => fitView({ padding: 0.3, duration: 300 })}
             title="Fit to Screen"
@@ -1060,8 +1082,8 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
         <Background color="#e2e8f0" gap={20} size={1} />
       </ReactFlow>
 
-      {/* Summary Tooltip */}
-      {hoveredSummary && (
+      {/* Summary Tooltip - disabled on touch devices */}
+      {hoveredSummary && !isTouchDevice && (
         <Tooltip content={hoveredSummary} position={tooltipPosition} />
       )}
 
