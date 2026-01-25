@@ -77,7 +77,7 @@ function CitationTray({ isOpen, onClose, title, content, url }: CitationTrayProp
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="absolute inset-0 bg-black/40 z-[100] backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/40 z-[100]"
                     />
 
                     {/* Tray - slides up from bottom of container */}
@@ -86,7 +86,7 @@ function CitationTray({ isOpen, onClose, title, content, url }: CitationTrayProp
                         animate={{ y: 0 }}
                         exit={{ y: "100%" }}
                         transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        className="absolute bottom-0 left-0 right-0 z-[101] bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[60%] border-t border-slate-100"
+                        className="absolute bottom-0 left-0 right-0 z-[101] bg-white rounded-t-2xl shadow-2xl flex flex-col max-h-[60%] border-t border-slate-100 max-w-6xl mx-auto"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
