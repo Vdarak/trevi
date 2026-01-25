@@ -247,6 +247,7 @@ export function ChatSidebar({
 
             {/* Sidebar */}
             <div
+                id="chat-sidebar-container"
                 ref={sidebarRef}
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? width : undefined }}
                 className={`

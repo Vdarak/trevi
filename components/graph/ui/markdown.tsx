@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Citation } from '@/lib/api';
-import { CitationTooltipGraph, findSnippetForCitation } from './citation-tooltip';
+import { SmartCitationTooltip, findSnippetForCitation } from './citation-tooltip';
 
 /**
  * Simple markdown renderer for conversation messages with citation support.
@@ -86,9 +86,10 @@ export function renderSimpleMarkdown(text: string, citationsData?: Citation[]): 
                 const citationUrl = citationData?.url;
 
                 elements.push(
-                    <CitationTooltipGraph
+                    <SmartCitationTooltip
                         key={`cite-${i}`}
                         index={citation.index}
+                        title={citation.title}
                         content={tooltipContent}
                         url={citationUrl}
                     />
