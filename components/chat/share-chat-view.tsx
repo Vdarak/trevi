@@ -56,7 +56,7 @@ export function ShareChatView({
     const hasGist = !!gist;
 
     return (
-        <div className="flex flex-col h-full w-full bg-white">
+        <div id="chat-sidebar-container" className="flex flex-col h-full w-full bg-white">
             {/* Header */}
             <div className="flex-shrink-0 border-b border-slate-200 bg-white">
                 {/* Top row: Tabs + Branding - centered with chat content */}
