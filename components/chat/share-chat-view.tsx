@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useRef } from 'react';
-import { Route, BookOpen, Sparkle, Check } from 'lucide-react';
+import { Route, BookOpen, Sparkle, Check, BookDown, Download } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoHoverable } from '@/components/ui/trevi-logo';
 import { GistCard } from '@/components/chat/gist-card';
-import { type MessagePayload, type Citation, type TreviBriefResponse } from '@/lib/api';
+import { type MessagePayload, type Citation, type TreviBriefResponse, downloadSharedConversation, downloadSharedGist } from '@/lib/api';
 
 interface ConversationNode {
     id: string;
@@ -24,6 +25,8 @@ interface ShareChatViewProps {
     biblio?: Record<string, string[]>;
     /** Gist/Brief data from share response */
     gist?: TreviBriefResponse['trevi_brief'] | null;
+    /** Share token for download APIs */
+    shareToken: string;
 }
 
 const tabs = [
@@ -41,6 +44,7 @@ export function ShareChatView({
     rootLabel = 'Shared Conversation',
     biblio,
     gist,
+    shareToken,
 }: ShareChatViewProps) {
     const [activeTab, setActiveTab] = useState<TabType>('thread');
     const [showGist, setShowGist] = useState(!!gist); // Auto-show if gist data exists
@@ -87,8 +91,16 @@ export function ShareChatView({
                             })}
                         </div>
 
-                        {/* Trevi Branding */}
-                        <div className="flex items-center gap-2">
+                        {/* Download button + Trevi Branding */}
+                        <div className="flex items-center gap-3">
+                            {/* Download Chat button - always visible */}
+                            <button
+                                onClick={() => downloadSharedConversation(shareToken)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                title="Download conversation as PDF"
+                            >
+                                <BookDown className="w-5 h-5" />
+                            </button>
                             <TreviLogoHoverable size={32} href="https://trevi.fyi" />
                             <a
                                 href="https://trevi.fyi"
@@ -109,24 +121,43 @@ export function ShareChatView({
 
                         {/* Gist Toggle Button - only shown if gist data is available */}
                         {hasGist && (
-                            <button
-                                onClick={() => setShowGist(!showGist)}
-                                className={`
-                                    flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all duration-200 
-                                    border text-xs font-semibold select-none
-                                    ${showGist
-                                        ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                        : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"}
-                                `}
-                                title={showGist ? "Hide Gist" : "Show Gist"}
-                            >
-                                {showGist ? (
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                                ) : (
-                                    <Sparkle className="w-3.5 h-3.5 fill-blue-500" />
-                                )}
-                                <span>Gist</span>
-                            </button>
+                            <div className="flex items-center">
+                                {/* Download Gist Button - animated reveal when Gist is open */}
+                                <AnimatePresence>
+                                    {showGist && (
+                                        <motion.button
+                                            initial={{ scale: 0, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 0, opacity: 0 }}
+                                            transition={{ duration: 0.15, ease: "easeOut" }}
+                                            onClick={() => downloadSharedGist(shareToken)}
+                                            className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
+                                            title="Download Gist as PDF"
+                                        >
+                                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                        </motion.button>
+                                    )}
+                                </AnimatePresence>
+                                <button
+                                    onClick={() => setShowGist(!showGist)}
+                                    className={`
+                                        flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 
+                                        border text-xs font-semibold select-none
+                                        ${showGist ? "rounded-r-lg" : "rounded-lg"}
+                                        ${showGist
+                                            ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
+                                            : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"}
+                                    `}
+                                    title={showGist ? "Hide Gist" : "Show Gist"}
+                                >
+                                    {showGist ? (
+                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    ) : (
+                                        <Sparkle className="w-3.5 h-3.5 fill-blue-500" />
+                                    )}
+                                    <span>Gist</span>
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

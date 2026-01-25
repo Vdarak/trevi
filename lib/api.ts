@@ -918,6 +918,69 @@ export async function downloadBrief(chatId: string, nodeId: string): Promise<voi
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Downloads the full conversation as a PDF for a specific node (authenticated user).
+ * Uses POST with chat_id and node_id in body, requires session cookie.
+ * 
+ * @param chatId - The chat ID
+ * @param nodeId - The node ID to download conversation for
+ * 
+ * @example
+ * await downloadConversation("chat-123", "node-456");
+ */
+export async function downloadConversation(chatId: string, nodeId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/chat/download`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, node_id: nodeId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Download failed: ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+
+  // Get filename from Content-Disposition header or use default
+  const contentDisposition = response.headers.get('Content-Disposition');
+  const filename = contentDisposition?.split('filename=')[1]?.replace(/"/g, '') || 'trevi-conversation.pdf';
+
+  // Trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Downloads a shared conversation as a PDF (public, no auth required).
+ * Opens in a new tab - browser handles the PDF download.
+ * 
+ * @param shareToken - The share token from the URL
+ * 
+ * @example
+ * downloadSharedConversation("abc123");
+ */
+export function downloadSharedConversation(shareToken: string): void {
+  window.open(`${API_BASE_URL}/api/sessions/chat/share/download?share_token=${encodeURIComponent(shareToken)}`, '_blank');
+}
+
+/**
+ * Downloads a shared gist/brief as a PDF (public, no auth required).
+ * Opens in a new tab - browser handles the PDF download.
+ * 
+ * @param shareToken - The share token from the URL
+ * 
+ * @example
+ * downloadSharedGist("abc123");
+ */
+export function downloadSharedGist(shareToken: string): void {
+  window.open(`${API_BASE_URL}/api/sessions/chat/share/gist/download?share_token=${encodeURIComponent(shareToken)}`, '_blank');
+}
+
 // ============================================================================
 // Share API
 // ============================================================================

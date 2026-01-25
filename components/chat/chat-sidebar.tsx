@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check, Download } from 'lucide-react';
+import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check, Download, BookDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
@@ -10,7 +10,7 @@ import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
-import { getBibliography, fetchTreviBrief, downloadBrief, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
+import { getBibliography, fetchTreviBrief, downloadBrief, downloadConversation, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 
 interface ConversationNode {
@@ -320,12 +320,27 @@ export function ChatSidebar({
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-1">
                             {activeTab === 'thread' && (
-                                <>
+                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                                    <button
+                                        onClick={() => {
+                                            if (chatId && activeNodeId) {
+                                                downloadConversation(chatId, activeNodeId).catch((err) => {
+                                                    console.error('Download failed:', err);
+                                                });
+                                            }
+                                        }}
+                                        disabled={!chatId || !activeNodeId}
+                                        className="p-1.5 border-r border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Download conversation as PDF"
+                                    >
+                                        <BookDown className="w-5 h-5" />
+                                    </button>
                                     <ShareLinkButton
                                         chatId={chatId}
                                         nodeId={activeNodeId}
+                                        className="rounded-none"
                                     />
-                                </>
+                                </div>
                             )}
                             <QuickFeedback
                                 context="component"

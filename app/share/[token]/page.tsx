@@ -135,6 +135,7 @@ export default function SharePage() {
                 rootLabel={rootLabel}
                 biblio={biblio}
                 gist={gist}
+                shareToken={token}
             />
         </div>
     );
