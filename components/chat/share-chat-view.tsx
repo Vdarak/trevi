@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from 'react';
-import { Route, BookOpen, Sparkle, Check, BookDown, Download } from 'lucide-react';
+import { Route, BookOpen, Sparkle, Check, BookDown, Download, ArrowRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
 import { TreviLogoHoverable } from '@/components/ui/trevi-logo';
@@ -299,6 +299,39 @@ export function ShareChatView({
                             </div>
                         )
                     )}
+                </div>
+            </div>
+
+            {/* Bottom CTA Button */}
+            <div className="flex-shrink-0 border-t border-slate-200 bg-white">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-center">
+                    <a
+                        href={typeof window !== 'undefined' ? window.location.origin : 'https://trevi.fyi'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-3 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors group"
+                    >
+                        <div className="rounded-full bg-white/10 flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
+                            <svg
+                                width={18}
+                                height={19.2}
+                                viewBox="-4 -4 42 42"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <path
+                                    d="M21.2078 16.8104L21.2078 29.1922C21.2078 31.019 19.7268 32.5 17.8999 32.5C16.0731 32.5 14.5921 31.019 14.5921 29.1922L14.5921 8.04607C14.5921 4.43078 11.6614 1.5 8.04607 1.5L5.70195 1.5C3.38128 1.5 1.5 3.38128 1.5 5.70196C1.5 8.02263 3.38128 9.90391 5.70195 9.90391L30.5 9.90391"
+                                    stroke="#fff"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                    fill="none"
+                                />
+                                <circle cx="30.5" cy="9.90391" r="3" fill="#fff" />
+                            </svg>
+                        </div>
+                        <span>Researched with Trevi. Try it out for free.</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                    </a>
                 </div>
             </div>
         </div>
