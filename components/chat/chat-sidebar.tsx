@@ -76,6 +76,7 @@ export function ChatSidebar({
     const [shouldRender, setShouldRender] = useState(false);
     const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
     const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
     // Trevi Brief states - derived from cache
     const briefState = activeNodeId ? briefCache?.get(activeNodeId) : undefined;
@@ -322,18 +323,27 @@ export function ChatSidebar({
                             {activeTab === 'thread' && (
                                 <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
                                     <button
-                                        onClick={() => {
-                                            if (chatId && activeNodeId) {
-                                                downloadConversation(chatId, activeNodeId).catch((err) => {
+                                        onClick={async () => {
+                                            if (chatId && activeNodeId && !isDownloadingPdf) {
+                                                setIsDownloadingPdf(true);
+                                                try {
+                                                    await downloadConversation(chatId, activeNodeId);
+                                                } catch (err) {
                                                     console.error('Download failed:', err);
-                                                });
+                                                } finally {
+                                                    setIsDownloadingPdf(false);
+                                                }
                                             }
                                         }}
-                                        disabled={!chatId || !activeNodeId}
+                                        disabled={!chatId || !activeNodeId || isDownloadingPdf}
                                         className="p-1.5 border-r border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Download conversation as PDF"
                                     >
-                                        <BookDown className="w-5 h-5" />
+                                        {isDownloadingPdf ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <BookDown className="w-5 h-5" />
+                                        )}
                                     </button>
                                     <ShareLinkButton
                                         chatId={chatId}
