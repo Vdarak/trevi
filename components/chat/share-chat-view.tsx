@@ -311,10 +311,10 @@ export function ShareChatView({
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-3 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors group"
                     >
-                        <div className="rounded-full bg-white/10 flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
+                        <div className="rounded-full bg-white/10 flex items-center justify-center flex-shrink-0" style={{ width: 32, height: 32 }}>
                             <svg
-                                width={18}
-                                height={19.2}
+                                width={24}
+                                height={25.6}
                                 viewBox="-4 -4 42 42"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -329,7 +329,7 @@ export function ShareChatView({
                                 <circle cx="30.5" cy="9.90391" r="3" fill="#fff" />
                             </svg>
                         </div>
-                        <span>Researched with Trevi. Try it out for free.</span>
+                        <span>Researched on Trevi. Try it for free.</span>
                         <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </a>
                 </div>
