@@ -824,6 +824,30 @@ export async function submitFeedback(
   return response.json();
 }
 
+/**
+ * Submits a bug report for the current session.
+ * 
+ * @param content - Bug report data with type and description
+ * @returns void
+ * 
+ * @example
+ * await submitBugReport({ type: "chat", description: "Chat not loading" });
+ */
+export async function submitBugReport(
+  content: { type: string; description: string }
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/sessions/bug-report`, {
+    ...defaultOptions,
+    method: "POST",
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to submit bug report: ${response.statusText}`);
+  }
+}
+
 // ============================================================================
 // Trevi Brief API
 // ============================================================================

@@ -8,6 +8,7 @@ import { TreviSpinner, TreviLogoStatic } from '@/components/ui/trevi-logo';
 import { cn } from '@/lib/utils';
 import { deleteChat, formatRelativeTime, getUserMetadata } from '@/lib/api';
 import { FeedbackModal, FeedbackButton } from '@/components/feedback/feedback-modal';
+import { BugReportModal, BugReportButton } from '@/components/feedback/bug-report-modal';
 import GradientText from '@/components/ui/gradient-text';
 import { useChatStore, type DisplayChat } from '@/lib/chat-store';
 
@@ -37,6 +38,7 @@ export function Sidebar({
 
   const [loading, setLoading] = useState(true);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -295,9 +297,13 @@ export function Sidebar({
           </div>
         </div>
 
-        <div className="px-4 py-4">
+        <div className="px-4 py-4 space-y-2">
           <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
+          <BugReportButton onClick={() => setIsBugReportOpen(true)} />
         </div>
+
+        {/* Bug Report Modal */}
+        <BugReportModal isOpen={isBugReportOpen} onClose={() => setIsBugReportOpen(false)} />
 
         {/* Feedback Modal */}
         <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
