@@ -10,13 +10,14 @@ interface BugReportModalProps {
     onClose: () => void;
 }
 
-type BugType = 'graph_renderer' | 'chat' | 'connection' | 'content_loss' | 'other' | null;
+type BugType = 'graph_renderer' | 'chat' | 'connection' | 'content_loss' | 'export' | 'other' | null;
 
 const BUG_TYPES: { id: BugType; label: string; description: string }[] = [
     { id: 'graph_renderer', label: 'Visual / Graph', description: 'Issues with the graph display' },
     { id: 'chat', label: 'Chat Problems', description: 'Issues with conversations' },
     { id: 'connection', label: 'Connection Issues', description: 'Loading or sync problems' },
     { id: 'content_loss', label: 'Content Gone', description: 'Missing or disappeared data' },
+    { id: 'export', label: 'Exported Chats Or PDFs', description: 'Issues with exported files' },
     { id: 'other', label: 'Something Else', description: 'Other issues' },
 ];
 
@@ -96,7 +97,7 @@ export function BugReportModal({ isOpen, onClose }: BugReportModalProps) {
                         <div className="space-y-4">
                             <p className="text-sm text-slate-600 mb-4">What kind of issue are you experiencing?</p>
                             <div className="grid grid-cols-2 gap-3">
-                                {BUG_TYPES.slice(0, 4).map((type) => (
+                                {BUG_TYPES.map((type) => (
                                     <button
                                         key={type.id}
                                         onClick={() => setSelectedType(type.id)}
@@ -107,13 +108,6 @@ export function BugReportModal({ isOpen, onClose }: BugReportModalProps) {
                                     </button>
                                 ))}
                             </div>
-                            <button
-                                onClick={() => setSelectedType('other')}
-                                className="w-full p-4 rounded-xl border-2 border-slate-200 hover:border-red-300 hover:bg-red-50/50 transition-all text-left group"
-                            >
-                                <span className="text-sm font-medium text-slate-700 group-hover:text-red-600">{BUG_TYPES[4].label}</span>
-                                <p className="text-xs text-slate-400 mt-1">{BUG_TYPES[4].description}</p>
-                            </button>
                         </div>
                     ) : (
                         /* Description Form with Tips */
