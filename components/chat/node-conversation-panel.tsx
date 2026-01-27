@@ -7,7 +7,7 @@ import type { MessagePayload, Citation, TreviBriefResponse } from '@/lib/api';
 import { fetchTreviBrief, downloadBrief } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 import { StatusLine } from '@/components/ui/status-line';
-import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { MessageBubble } from './message-bubble';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
@@ -70,11 +70,8 @@ export function NodeConversationPanel({
         }
     }, [nodeId, isRootNode]);
 
-    // Filter to only assistant messages and combine them
-    const aiContent = useMemo(() => {
-        const assistantMessages = messages.filter(msg => msg.role === 'assistant');
-        return assistantMessages.map(m => m.content).join('\n\n');
-    }, [messages]);
+    // Check if we have any messages
+    const hasMessages = messages.length > 0;
 
     // Close on escape key
     useEffect(() => {
@@ -102,7 +99,7 @@ export function NodeConversationPanel({
         }
     };
 
-    if (!isOpen || !aiContent) return null;
+    if (!isOpen || !hasMessages) return null;
 
     return (
         <div
@@ -126,16 +123,22 @@ export function NodeConversationPanel({
                                         exit={{ scale: 0, opacity: 0 }}
                                         transition={{ duration: 0.15, ease: "easeOut" }}
                                         onClick={() => {
-                                            if (chatId && nodeId) {
+                                            if (chatId && nodeId && !isBriefLoading) {
                                                 downloadBrief(chatId, nodeId).catch((err) => {
                                                     console.error('Download failed:', err);
                                                 });
                                             }
                                         }}
-                                        className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
-                                        title="Download Brief as PDF"
+                                        disabled={isBriefLoading}
+                                        className={cn(
+                                            "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white border-slate-200 transition-colors overflow-hidden",
+                                            isBriefLoading
+                                                ? "text-slate-300 cursor-not-allowed"
+                                                : "text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                        )}
+                                        title={isBriefLoading ? "Generating gist..." : "Download Brief as PDF"}
                                     >
-                                        <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                        <Download className="w-4 h-4 flex-shrink-0" />
                                     </motion.button>
                                 )}
                             </AnimatePresence>
@@ -179,12 +182,10 @@ export function NodeConversationPanel({
                                     "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
                                     showGist ? "rounded-r-lg" : "rounded-lg",
                                     isBriefLoading
-                                        ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                        ? "bg-white text-blue-600 border-slate-200"
                                         : briefData
-                                            ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                            : showGist
-                                                ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                                : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                            ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                            : "bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50"
                                 )}
                                 title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                             >
@@ -194,12 +195,17 @@ export function NodeConversationPanel({
                                         transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                                         className="flex items-center justify-center"
                                     >
-                                        <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
+                                        <motion.span
+                                            animate={{ opacity: [0.3, 1, 0.3] }}
+                                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                        >
+                                            <Sparkle className="w-4 h-4 fill-blue-600 text-blue-600" />
+                                        </motion.span>
                                     </motion.span>
                                 ) : briefData ? (
-                                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    <Sparkle className={`w-4 h-4 fill-blue-600 text-blue-600 transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
                                 ) : (
-                                    <Sparkle className="w-3.5 h-3.5 fill-blue-500" />
+                                    <Sparkle className="w-4 h-4 stroke-blue-600" strokeWidth={2} />
                                 )}
                                 <span>Gist</span>
                             </button>
@@ -258,7 +264,17 @@ export function NodeConversationPanel({
                         className="flex-1 overflow-y-auto overflow-x-hidden p-4 text-sm text-slate-700 leading-relaxed"
                         style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
                     >
-                        <MarkdownRenderer content={aiContent} citations={citations} />
+                        <div className="space-y-4">
+                            {messages.map((msg, idx) => (
+                                <MessageBubble
+                                    key={`${nodeId}-${idx}`}
+                                    role={msg.role}
+                                    content={msg.content}
+                                    citations={citations}
+                                    nodeId={nodeId}
+                                />
+                            ))}
+                        </div>
 
                         {/* Optimistic User Message */}
                         {isStreaming && (
@@ -362,11 +378,8 @@ export function NodeConversationModal({
         return `${xPercent}% ${yPercent}%`;
     }, [clickPosition]);
 
-    // Filter to only assistant messages and combine them
-    const aiContent = useMemo(() => {
-        const assistantMessages = messages.filter(msg => msg.role === 'assistant');
-        return assistantMessages.map(m => m.content).join('\n\n');
-    }, [messages]);
+    // Check if we have any messages
+    const hasMessages = messages.length > 0;
 
     // Close on escape key or backdrop click
     useEffect(() => {
@@ -400,7 +413,7 @@ export function NodeConversationModal({
         }
     };
 
-    if (!isOpen || !aiContent) return null;
+    if (!isOpen || !hasMessages) return null;
 
     return (
         <div
@@ -434,16 +447,22 @@ export function NodeConversationModal({
                                             exit={{ scale: 0, opacity: 0 }}
                                             transition={{ duration: 0.15, ease: "easeOut" }}
                                             onClick={() => {
-                                                if (chatId && nodeId) {
+                                                if (chatId && nodeId && !isBriefLoading) {
                                                     downloadBrief(chatId, nodeId).catch((err) => {
                                                         console.error('Download failed:', err);
                                                     });
                                                 }
                                             }}
-                                            className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
-                                            title="Download Brief as PDF"
+                                            disabled={isBriefLoading}
+                                            className={cn(
+                                                "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white border-slate-200 transition-colors overflow-hidden",
+                                                isBriefLoading
+                                                    ? "text-slate-300 cursor-not-allowed"
+                                                    : "text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                            )}
+                                            title={isBriefLoading ? "Generating gist..." : "Download Brief as PDF"}
                                         >
-                                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                            <Download className="w-4 h-4 flex-shrink-0" />
                                         </motion.button>
                                     )}
                                 </AnimatePresence>
@@ -487,12 +506,10 @@ export function NodeConversationModal({
                                         "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
                                         showGist ? "rounded-r-lg" : "rounded-lg",
                                         isBriefLoading
-                                            ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                            ? "bg-white text-blue-600 border-slate-200"
                                             : briefData
-                                                ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                                : showGist
-                                                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                                    : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                                ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                : "bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50"
                                     )}
                                     title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                                 >
@@ -502,23 +519,17 @@ export function NodeConversationModal({
                                             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                                             className="flex items-center justify-center"
                                         >
-                                            <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
+                                            <motion.span
+                                                animate={{ opacity: [0.3, 1, 0.3] }}
+                                                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                            >
+                                                <Sparkle className="w-4 h-4 fill-blue-600 text-blue-600" />
+                                            </motion.span>
                                         </motion.span>
                                     ) : briefData ? (
-                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                        <Sparkle className={`w-4 h-4 fill-blue-600 text-blue-600 transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
                                     ) : (
-                                        <motion.span
-                                            animate={{ rotate: showGist ? 45 : 0 }}
-                                            transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                                            className="flex items-center justify-center font-bold"
-                                        >
-                                            <Sparkle
-                                                className={cn(
-                                                    "w-3.5 h-3.5 transition-colors duration-200",
-                                                    showGist ? "fill-blue-600" : "fill-blue-500"
-                                                )}
-                                            />
-                                        </motion.span>
+                                        <Sparkle className="w-4 h-4 stroke-blue-600" strokeWidth={2} />
                                     )}
                                     <span>Gist</span>
                                 </button>
@@ -576,7 +587,17 @@ export function NodeConversationModal({
                             className="flex-1 overflow-y-auto overflow-x-hidden p-5 text-sm text-slate-700 leading-relaxed"
                             style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e1 transparent' }}
                         >
-                            <MarkdownRenderer content={aiContent} citations={citations} />
+                            <div className="space-y-4">
+                                {messages.map((msg, idx) => (
+                                    <MessageBubble
+                                        key={`${nodeId}-${idx}`}
+                                        role={msg.role}
+                                        content={msg.content}
+                                        citations={citations}
+                                        nodeId={nodeId}
+                                    />
+                                ))}
+                            </div>
 
                             {/* Optimistic User Message */}
                             {isStreaming && (

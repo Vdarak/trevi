@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { ConversationPanelNodeData } from '../types';
-import { renderSimpleMarkdown } from '../ui/markdown';
+import { renderSimpleMarkdown } from '@/components/ui/markdown-renderer';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 
 /**

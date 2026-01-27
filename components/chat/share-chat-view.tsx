@@ -121,10 +121,10 @@ export function ShareChatView({
                                             exit={{ scale: 0, opacity: 0 }}
                                             transition={{ duration: 0.15, ease: "easeOut" }}
                                             onClick={() => downloadSharedGist(shareToken)}
-                                            className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
+                                            className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
                                             title="Download Gist as PDF"
                                         >
-                                            <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                            <Download className="w-4 h-4 flex-shrink-0" />
                                         </motion.button>
                                     )}
                                 </AnimatePresence>
@@ -135,16 +135,14 @@ export function ShareChatView({
                                         border text-xs font-semibold select-none
                                         ${showGist ? "rounded-r-lg" : "rounded-lg"}
                                         ${showGist
-                                            ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                            : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"}
+                                            ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                            : "bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50"}
                                     `}
                                     title={showGist ? "Hide Gist" : "Show Gist"}
                                 >
-                                    {showGist ? (
-                                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                                    ) : (
-                                        <Sparkle className="w-3.5 h-3.5 fill-blue-500" />
-                                    )}
+                                    <Sparkle
+                                        className={`w-4 h-4 fill-blue-600 text-blue-600 transition-transform duration-200 ${showGist ? "rotate-45" : ""}`}
+                                    />
                                     <span>Gist</span>
                                 </button>
                             </div>

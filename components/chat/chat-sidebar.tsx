@@ -383,16 +383,22 @@ export function ChatSidebar({
                                                 exit={{ scale: 0, opacity: 0 }}
                                                 transition={{ duration: 0.15, ease: "easeOut" }}
                                                 onClick={() => {
-                                                    if (chatId && activeNodeId) {
+                                                    if (chatId && activeNodeId && !isBriefLoading) {
                                                         downloadBrief(chatId, activeNodeId).catch((err) => {
                                                             console.error('Download failed:', err);
                                                         });
                                                     }
                                                 }}
-                                                className="flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50 transition-colors overflow-hidden"
-                                                title="Download Brief as PDF"
+                                                disabled={isBriefLoading}
+                                                className={cn(
+                                                    "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white border-slate-200 transition-colors overflow-hidden",
+                                                    isBriefLoading
+                                                        ? "text-slate-300 cursor-not-allowed"
+                                                        : "text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                                )}
+                                                title={isBriefLoading ? "Generating gist..." : "Download Brief as PDF"}
                                             >
-                                                <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                                                <Download className="w-4 h-4 flex-shrink-0" />
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
@@ -446,12 +452,10 @@ export function ChatSidebar({
                                             "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
                                             showGist ? "rounded-r-lg" : "rounded-lg",
                                             isBriefLoading
-                                                ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                ? "bg-white text-blue-600 border-slate-200"
                                                 : briefData
-                                                    ? "bg-green-100 text-green-600 border-green-200 shadow-inner"
-                                                    : showGist
-                                                        ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                                        : "bg-white text-slate-500 border-slate-200 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
+                                                    : "bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50"
                                         )}
                                         title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                                     >
@@ -461,23 +465,17 @@ export function ChatSidebar({
                                                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                                                 className="flex items-center justify-center"
                                             >
-                                                <Sparkle className="w-3.5 h-3.5 fill-blue-600" />
+                                                <motion.span
+                                                    animate={{ opacity: [0.3, 1, 0.3] }}
+                                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                                                >
+                                                    <Sparkle className="w-4 h-4 fill-blue-600 text-blue-600" />
+                                                </motion.span>
                                             </motion.span>
                                         ) : briefData ? (
-                                            <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                            <Sparkle className={`w-4 h-4 fill-blue-600 text-blue-600 transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
                                         ) : (
-                                            <motion.span
-                                                animate={{ rotate: showGist ? 45 : 0 }}
-                                                transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                                                className="flex items-center justify-center font-bold"
-                                            >
-                                                <Sparkle
-                                                    className={cn(
-                                                        "w-3.5 h-3.5 transition-colors duration-200",
-                                                        showGist ? "fill-blue-600" : "fill-blue-500"
-                                                    )}
-                                                />
-                                            </motion.span>
+                                            <Sparkle className="w-4 h-4 stroke-blue-600" strokeWidth={2} />
                                         )}
                                         <span>Gist</span>
                                     </button>
