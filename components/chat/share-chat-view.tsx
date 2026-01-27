@@ -4,7 +4,6 @@ import React, { useState, useRef } from 'react';
 import { Route, BookOpen, Sparkle, Check, BookDown, Download, ArrowRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
-import { TreviLogoHoverable } from '@/components/ui/trevi-logo';
 import { GistCard } from '@/components/chat/gist-card';
 import { type MessagePayload, type Citation, type TreviBriefResponse, downloadSharedConversation, downloadSharedGist } from '@/lib/api';
 
@@ -91,25 +90,16 @@ export function ShareChatView({
                             })}
                         </div>
 
-                        {/* Download button + Trevi Branding */}
+                        {/* Download button */}
                         <div className="flex items-center gap-3">
                             {/* Download Chat button - always visible */}
                             <button
                                 onClick={() => downloadSharedConversation(shareToken)}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                className="p-2 rounded-lg text-blue-600 hover:text-blue-600 hover:bg-blue-50 active:bg-blue-100 active:text-blue-600 transition-colors"
                                 title="Download conversation as PDF"
                             >
                                 <BookDown className="w-5 h-5" />
                             </button>
-                            <TreviLogoHoverable size={32} href="https://trevi.fyi" />
-                            <a
-                                href="https://trevi.fyi"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-lg font-semibold text-slate-900 tracking-tight no-underline"
-                            >
-                                trevi
-                            </a>
                         </div>
                     </div>
                 </div>
@@ -309,9 +299,9 @@ export function ShareChatView({
                         href={typeof window !== 'undefined' ? window.location.origin : 'https://trevi.fyi'}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-3 px-6 py-3 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors group"
+                        className="inline-flex items-center gap-3 px-6 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-200 transition-colors group"
                     >
-                        <div className="rounded-full bg-white/10 flex items-center justify-center flex-shrink-0" style={{ width: 32, height: 32 }}>
+                        <div className="rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0" style={{ width: 32, height: 32 }}>
                             <svg
                                 width={24}
                                 height={25.6}

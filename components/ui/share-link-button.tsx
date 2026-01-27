@@ -46,9 +46,8 @@ export function ShareLinkButton({
                 disabled={isDisabled}
                 title="Share conversation"
                 className={cn(
-                    "rounded-lg transition-colors text-slate-400 hover:text-slate-600 hover:bg-slate-100",
-                    sizeStyles[size],
-                    isOpen && "bg-slate-100 text-slate-700",
+                    "p-2 rounded-lg transition-colors text-blue-600 hover:text-blue-600 hover:bg-blue-50 active:bg-blue-100 active:text-blue-600",
+                    isOpen && "bg-blue-50 text-blue-600",
                     isDisabled && "opacity-50 cursor-not-allowed",
                     className
                 )}

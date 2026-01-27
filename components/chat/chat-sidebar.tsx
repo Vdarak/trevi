@@ -288,7 +288,7 @@ export function ChatSidebar({
                 </div>
 
                 {/* Header */}
-                <header className="flex-shrink-0 bg-white border-b border-slate-200 pt-[env(safe-area-inset-top)]">
+                <header className="flex-shrink-0 bg-white border-b border-slate-200">
                     {/* Tab Bar */}
                     <div className="flex items-center h-12 sm:h-14 px-1">
                         <div className="flex-1 flex min-w-0 overflow-hidden">
@@ -305,7 +305,7 @@ export function ChatSidebar({
                                             setActiveTab(tab.id);
                                         }}
                                         className={`
-                                            relative flex items-center justify-center gap-1.5 px-3 py-3
+                                            relative flex items-center justify-center gap-2 px-3 py-3
                                             text-sm font-medium transition-colors whitespace-nowrap
                                             ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}
                                         `}
@@ -321,7 +321,7 @@ export function ChatSidebar({
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-1">
                             {activeTab === 'thread' && (
-                                <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                                <>
                                     <button
                                         onClick={async () => {
                                             if (chatId && activeNodeId && !isDownloadingPdf) {
@@ -336,7 +336,7 @@ export function ChatSidebar({
                                             }
                                         }}
                                         disabled={!chatId || !activeNodeId || isDownloadingPdf}
-                                        className="p-1.5 border-r border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="p-2 rounded-lg text-blue-600 hover:text-blue-600 hover:bg-blue-50 active:bg-blue-100 active:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                         title="Download conversation as PDF"
                                     >
                                         {isDownloadingPdf ? (
@@ -348,9 +348,8 @@ export function ChatSidebar({
                                     <ShareLinkButton
                                         chatId={chatId}
                                         nodeId={activeNodeId}
-                                        className="rounded-none"
                                     />
-                                </div>
+                                </>
                             )}
                             <QuickFeedback
                                 context="component"
@@ -658,10 +657,10 @@ export function ChatSidebar({
                                                 {currentNodes.length > 1 && (
                                                     <div className={`
                                                         inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 
-                                                        rounded-full text-xs font-medium
+                                                        rounded-full text-xs font-semibold
                                                         ${node.id === activeNodeId
-                                                            ? 'bg-blue-100 text-blue-700'
-                                                            : 'bg-slate-100 text-slate-500'}
+                                                            ? 'text-blue-700'
+                                                            : 'text-slate-500'}
                                                     `}>
                                                         <span className={`w-1.5 h-1.5 rounded-full ${node.id === activeNodeId ? 'bg-blue-500' : 'bg-slate-400'}`} />
                                                         {node.label}
