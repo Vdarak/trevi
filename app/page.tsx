@@ -1268,28 +1268,39 @@ function HomeContent() {
       <main className="flex-1 flex flex-col md:flex-row h-full relative overflow-hidden">
         {/* Mobile Tab Bar - bottom navigation */}
         {showGraphPage && (
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
-            <button
-              onClick={() => setMobileActiveTab('graph')}
-              className={`flex-1 flex items-center justify-center gap-2 py-5 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
-                }`}
-            >
-              <Network className="w-5 h-5" />
-              <span className="text-sm font-medium">Tree</span>
-            </button>
-            <button
-              onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
-                }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              <span className="text-sm font-medium">Chat</span>
-            </button>
-          </div>
+          <>
+            {/* Mobile Banner - only in graph view */}
+            {mobileActiveTab === 'graph' && (
+              <div className="fixed bottom-[73px] left-0 right-0 z-40 bg-yellow-100 border-t border-yellow-200 px-4 py-2.5 md:hidden">
+                <p className="text-center text-xs font-medium text-yellow-900">
+                  For Best Experience - Try Trevi on a Computer
+                </p>
+              </div>
+            )}
+
+            <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex md:hidden">
+              <button
+                onClick={() => setMobileActiveTab('graph')}
+                className={`flex-1 flex items-center justify-center gap-2 py-5 transition-colors ${mobileActiveTab === 'graph' ? 'text-blue-600' : 'text-slate-400'
+                  }`}
+              >
+                <Network className="w-5 h-5" />
+                <span className="text-sm font-medium">Tree</span>
+              </button>
+              <button
+                onClick={() => { setMobileActiveTab('chat'); setIsChatSidebarOpen(true); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 transition-colors ${mobileActiveTab === 'chat' ? 'text-blue-600' : 'text-slate-400'
+                  }`}
+              >
+                <MessageSquare className="w-5 h-5" />
+                <span className="text-sm font-medium">Chat</span>
+              </button>
+            </div>
+          </>
         )}
 
         {/* Graph/Content Area */}
-        <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
+        <div className={`flex-1 h-full overflow-hidden relative ${showGraphPage && mobileActiveTab === 'graph' ? 'pb-[114px] md:pb-0' : showGraphPage ? 'pb-16 md:pb-0' : ''}`}>
           {showLoadingPage ? (
             <GraphLoading
               query={processingQuery || undefined}

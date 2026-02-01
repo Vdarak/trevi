@@ -1095,6 +1095,7 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
           nodeStrokeColor={getMiniMapStrokeColor}
           nodeStrokeWidth={2}
           maskColor="rgba(0,0,0,0.1)"
+          className="hidden md:block"
         />
         <Background color="#e2e8f0" gap={20} size={1} />
       </ReactFlow>
