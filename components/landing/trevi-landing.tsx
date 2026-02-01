@@ -5,9 +5,34 @@ import { useRouter } from "next/navigation";
 import { TreviLogoStatic, TreviLogoAnimation } from "@/components/ui/trevi-logo";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, ChevronDown, Search, Check } from "lucide-react";
 import { SimpleOnboarding } from "@/components/onboarding/simple-onboarding";
 import { setUserMetadata, getUserMetadata, getChats } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+// Country list
+const COUNTRIES = [
+    "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria",
+    "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan",
+    "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia",
+    "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica",
+    "Croatia", "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt",
+    "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon",
+    "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana",
+    "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel",
+    "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan", "Laos",
+    "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi",
+    "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova",
+    "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands",
+    "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau",
+    "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania",
+    "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal",
+    "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea",
+    "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan",
+    "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
+    "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela",
+    "Vietnam", "Yemen", "Zambia", "Zimbabwe"
+];
 
 export function TreviLanding() {
     const router = useRouter();
@@ -16,7 +41,10 @@ export function TreviLanding() {
         firstName: "",
         lastName: "",
         email: "",
+        country: "",
     });
+    const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
+    const [countrySearchQuery, setCountrySearchQuery] = useState("");
     const [isFormValid, setIsFormValid] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -49,11 +77,12 @@ export function TreviLanding() {
     }, [router]);
 
     useEffect(() => {
-        const { firstName, lastName, email } = formData;
+        const { firstName, lastName, email, country } = formData;
         const isValid =
             firstName.trim().length > 0 &&
             lastName.trim().length > 0 &&
             email.trim().length > 0 &&
+            country.trim().length > 0 &&
             /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         setIsFormValid(isValid);
     }, [formData]);
@@ -81,6 +110,7 @@ export function TreviLanding() {
                 email: formData.email.trim(),
                 first_name: formData.firstName.trim(),
                 last_name: formData.lastName.trim(),
+                country: formData.country.trim(),
             });
 
             console.log("User metadata saved successfully");
@@ -217,6 +247,108 @@ export function TreviLanding() {
                                     onChange={handleChange}
                                     className="bg-slate-50 border-slate-200 h-12"
                                 />
+                            </div>
+
+                            {/* Country Dropdown */}
+                            <div className="space-y-2">
+                                <label
+                                    htmlFor="country"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-slate-700"
+                                >
+                                    Country
+                                </label>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                                        className={cn(
+                                            "w-full flex items-center justify-between px-3 h-12 rounded-md",
+                                            "bg-slate-50 border border-slate-200 text-left",
+                                            "hover:border-slate-300 hover:bg-slate-100/50 transition-all duration-200",
+                                            "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2",
+                                            isCountryDropdownOpen && "ring-2 ring-slate-900 ring-offset-2 border-slate-300"
+                                        )}
+                                    >
+                                        <span className={cn(
+                                            "text-sm",
+                                            formData.country ? "text-slate-900 font-medium" : "text-slate-400"
+                                        )}>
+                                            {formData.country || "Select your country"}
+                                        </span>
+                                        <ChevronDown className={cn(
+                                            "w-4 h-4 text-slate-500 transition-transform duration-200",
+                                            isCountryDropdownOpen && "rotate-180"
+                                        )} />
+                                    </button>
+
+                                    {isCountryDropdownOpen && (
+                                        <>
+                                            {/* Backdrop to close dropdown when clicking outside */}
+                                            <div 
+                                                className="fixed inset-0 z-40" 
+                                                onClick={() => {
+                                                    setIsCountryDropdownOpen(false);
+                                                    setCountrySearchQuery("");
+                                                }}
+                                            />
+                                            <div className="absolute z-50 w-full mt-2 bg-white rounded-lg border border-slate-200 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                {/* Search Input */}
+                                                <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search countries..."
+                                                            value={countrySearchQuery}
+                                                            onChange={(e) => setCountrySearchQuery(e.target.value)}
+                                                            className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 rounded-md bg-white border border-slate-200 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 placeholder:text-slate-400"
+                                                            autoFocus
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Country List */}
+                                                <div className="max-h-52 overflow-y-auto overscroll-contain">
+                                                    {COUNTRIES.filter(country =>
+                                                        country.toLowerCase().includes(countrySearchQuery.toLowerCase())
+                                                    ).length > 0 ? (
+                                                        COUNTRIES.filter(country =>
+                                                            country.toLowerCase().includes(countrySearchQuery.toLowerCase())
+                                                        ).map((country) => (
+                                                            <button
+                                                                key={country}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({ ...prev, country }));
+                                                                    setIsCountryDropdownOpen(false);
+                                                                    setCountrySearchQuery("");
+                                                                }}
+                                                                className={cn(
+                                                                    "w-full px-3 py-2.5 text-left text-sm transition-all duration-150 flex items-center justify-between",
+                                                                    "hover:bg-slate-100 focus:bg-slate-100 focus:outline-none",
+                                                                    formData.country === country
+                                                                        ? "bg-slate-900 text-white hover:bg-slate-800 focus:bg-slate-800"
+                                                                        : "text-slate-700"
+                                                                )}
+                                                            >
+                                                                <span>{country}</span>
+                                                                {formData.country === country && (
+                                                                    <Check className="w-4 h-4" />
+                                                                )}
+                                                            </button>
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-3 py-8 text-sm text-slate-400 text-center">
+                                                            <p>No countries found</p>
+                                                            <p className="text-xs mt-1">Try a different search term</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

@@ -90,6 +90,7 @@ export function ChatSidebar({
     const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
     const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
 
     // Trevi Brief states - derived from cache
     const briefState = activeNodeId ? briefCache?.get(activeNodeId) : undefined;
@@ -120,6 +121,24 @@ export function ChatSidebar({
     const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
+
+    // Detect mobile and set default tab
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 768; // md breakpoint in Tailwind is 768px
+            setIsMobile(mobile);
+            // Set default tab to 'full' on mobile, 'thread' on desktop
+            if (mobile) {
+                setActiveTab('full');
+            } else {
+                setActiveTab('thread');
+            }
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Handle entrance/exit animation
     useEffect(() => {

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, Compass, X, GitBranch, Layers, ArrowDown, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowRight, X, GitBranch, Layers, ArrowDown, ThumbsUp, ThumbsDown } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
@@ -167,7 +167,7 @@ function GetStartedButton() {
             variants={fadeUpVariant}
             initial="hidden"
             animate="visible"
-            custom={1.0}
+            custom={0.9}
             className="pb-10"
         >
             <Link
@@ -175,8 +175,8 @@ function GetStartedButton() {
                 className={cn(
                     "inline-flex items-center gap-2 px-8 py-4 rounded-full text-base",
                     "bg-slate-900 text-white font-bold tracking-wide",
-                    "hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all duration-200",
-                    "shadow-xl hover:shadow-2xl hover:shadow-blue-900/10"
+                    "shadow-xl transition-all duration-200",
+                    "hover:bg-slate-800 hover:scale-105 active:scale-95 hover:shadow-2xl hover:shadow-blue-900/10"
                 )}
             >
                 Get Started

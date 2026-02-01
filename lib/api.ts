@@ -178,6 +178,7 @@ export interface UserMetadataRequest {
   email: string;
   first_name: string;
   last_name: string;
+  country?: string;
 }
 
 /** Trevi Brief response from POST /sessions/trevi-brief */
