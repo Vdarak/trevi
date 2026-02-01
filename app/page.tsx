@@ -198,6 +198,11 @@ function HomeContent() {
           setCurrentNodeId(event.node_id);
           setRootNodeId(event.node_id); // Always set for new chats
 
+          // On mobile, default to chat tab after first query completes
+          if (typeof window !== 'undefined' && window.innerWidth < 768) {
+            setMobileActiveTab('chat');
+          }
+
           // Fetch full graph - wait for it before clearing loading states
           getGraph(event.chat_id)
             .then((graphResponse) => {
@@ -481,6 +486,11 @@ function HomeContent() {
     setProcessingQuery(null);
     setStreamingUserMessage("");
     setNodeStreamingUserMessage("");
+
+    // On mobile, default to chat tab when opening a chat
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileActiveTab('chat');
+    }
 
     try {
       const graphResponse = await getGraph(chatId);
@@ -1312,6 +1322,7 @@ function HomeContent() {
                   setBriefCache(prev => new Map(prev).set(nodeId, data));
                 }}
                 skipLayoutAnimation={isLoading}
+                isVisible={mobileActiveTab === 'graph'}
                 globalStatus={{
                   isActive: isStreaming || isNodeStreaming || isLoading || loadingNodeIds.size > 0,
                   message: statusMessage || nodeStatusMessage,

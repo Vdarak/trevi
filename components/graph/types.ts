@@ -38,6 +38,8 @@ export interface KnowledgeGraphProps {
     onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
     // Skip layout animation (useful when switching between chats)
     skipLayoutAnimation?: boolean;
+    // Track visibility for mobile tab switches (triggers auto-fit when becoming visible)
+    isVisible?: boolean;
 }
 
 export interface BriefState {

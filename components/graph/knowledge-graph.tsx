@@ -59,7 +59,7 @@ const edgeTypes = {
 // ============================================================================
 
 // Inner component that has access to useReactFlow
-function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, unreadNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate, skipLayoutAnimation }: KnowledgeGraphProps) {
+function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, onDirectionClick, onDeleteNode, loadingNodeIds, unreadNodeIds, onToggleChatSidebar, isChatSidebarOpen, initialActiveNodeId, onNodeMessage, isNodeStreaming, nodeStatusMessage, nodeStreamUserMessage, globalStatus, chatId, briefCache, onBriefCacheUpdate, skipLayoutAnimation, isVisible = true }: KnowledgeGraphProps) {
   // Deduplicate graphNodes to prevent rendering issues and key warnings
   const graphNodes = useMemo(() => {
     const seen = new Set<string>();
@@ -108,6 +108,9 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
   useEffect(() => {
     prevChatIdRef.current = chatId;
   }, [chatId]);
+
+  // Track previous visibility state to detect becoming visible
+  const prevIsVisibleRef = useRef<boolean>(isVisible);
 
   // Detect touch input - disable hover tooltips when user is using touch
   // This handles hybrid devices (laptops with touchscreens) by detecting actual touch usage
@@ -218,6 +221,20 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
       setCollapsedNodes(new Set());
     }
   }, [rootNodeId]);
+
+  // Auto-fit when graph becomes visible (e.g., switching from chat tab to graph tab)
+  useEffect(() => {
+    const wasVisible = prevIsVisibleRef.current;
+    prevIsVisibleRef.current = isVisible;
+
+    // If graph just became visible and has nodes, fit to view
+    if (!wasVisible && isVisible && graphNodes.length > 0) {
+      // Small delay to ensure the DOM has updated and the graph is actually visible
+      setTimeout(() => {
+        fitView({ padding: 0.3, duration: 600 });
+      }, 100);
+    }
+  }, [isVisible, graphNodes.length, fitView]);
 
   // Track last clicked node to prevent re-pulsing on click-triggered updates
   const lastClickedNodeIdRef = useRef<string | null>(null);
