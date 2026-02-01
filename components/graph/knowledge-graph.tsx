@@ -1125,6 +1125,9 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
           })()}
           briefCache={briefCache}
           onBriefCacheUpdate={onBriefCacheUpdate}
+          graphNodes={graphNodes}
+          onDirectionClick={onDirectionClick}
+          loadingNodeIds={loadingNodeIds}
         />
       )}
 

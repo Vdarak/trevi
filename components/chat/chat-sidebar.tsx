@@ -20,6 +20,12 @@ interface ConversationNode {
     citations?: Citation[];
 }
 
+interface GraphNode {
+    id: string;
+    label: string;
+    isDirection?: boolean;
+}
+
 type TabType = 'full' | 'thread' | 'bibliography';
 
 interface ChatSidebarProps {
@@ -39,6 +45,10 @@ interface ChatSidebarProps {
     // Brief cache for sharing data between sidebar and modal
     briefCache?: Map<string, BriefState>;
     onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
+    // Direction nodes for clickable exploration
+    graphNodes?: GraphNode[];
+    onDirectionClick?: (nodeId: string) => void;
+    loadingNodeIds?: Set<string> | string[] | null;
 }
 
 const tabs = [
@@ -66,6 +76,9 @@ export function ChatSidebar({
     onClose,
     briefCache,
     onBriefCacheUpdate,
+    graphNodes,
+    onDirectionClick,
+    loadingNodeIds,
 }: ChatSidebarProps) {
     const [inputValue, setInputValue] = useState('');
     const [showGist, setShowGist] = useState(false);
@@ -156,6 +169,11 @@ export function ChatSidebar({
     const currentNodes = useMemo(() => {
         return activeTab === 'thread' ? threadNodes : conversationNodes;
     }, [activeTab, threadNodes, conversationNodes]);
+
+    // Filter direction nodes from graph for clickable bullets
+    const directionNodes = useMemo(() => {
+        return graphNodes?.filter(n => n.isDirection).map(n => ({ id: n.id, label: n.label })) || [];
+    }, [graphNodes]);
 
     // Title based on active tab
     const currentTitle = activeTab === 'thread' && activeLabel ? activeLabel : rootLabel;
@@ -674,6 +692,9 @@ export function ChatSidebar({
                                                             content={msg.content}
                                                             citations={node.citations}
                                                             onEdit={msg.role === 'user' && !isStreaming ? (text) => onEditMessage?.(node.id, text) : undefined}
+                                                            directionNodes={msg.role === 'assistant' ? directionNodes : undefined}
+                                                            onDirectionClick={msg.role === 'assistant' ? onDirectionClick : undefined}
+                                                            loadingNodeIds={msg.role === 'assistant' ? loadingNodeIds : undefined}
                                                         />
                                                     ))}
                                                 </div>

@@ -5,6 +5,11 @@ import type { Citation } from '@/lib/api';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { InlineResponseFeedback } from '@/components/feedback/quick-feedback';
 
+interface DirectionNode {
+    id: string;
+    label: string;
+}
+
 interface MessageBubbleProps {
     role: 'user' | 'assistant';
     content: string;
@@ -14,9 +19,12 @@ interface MessageBubbleProps {
     nodeId?: string;
     /** Hide the feedback buttons (for public share views) */
     hideFeedback?: boolean;
+    directionNodes?: DirectionNode[];
+    onDirectionClick?: (nodeId: string) => void;
+    loadingNodeIds?: Set<string> | string[] | null;
 }
 
-export function MessageBubble({ role, content, isStreaming, citations, onEdit, nodeId, hideFeedback }: MessageBubbleProps) {
+export function MessageBubble({ role, content, isStreaming, citations, onEdit, nodeId, hideFeedback, directionNodes, onDirectionClick, loadingNodeIds }: MessageBubbleProps) {
     const isUser = role === 'user';
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(content);
@@ -119,7 +127,13 @@ export function MessageBubble({ role, content, isStreaming, citations, onEdit, n
                 <div className="w-full">
                     {/* AI message - full width, no border, smaller text */}
                     <div className="text-xs leading-relaxed text-slate-700">
-                        <MarkdownRenderer content={content} citations={citations} />
+                        <MarkdownRenderer
+                            content={content}
+                            citations={citations}
+                            directionNodes={directionNodes}
+                            onDirectionClick={onDirectionClick}
+                            loadingNodeIds={loadingNodeIds}
+                        />
                     </div>
 
                     {/* Feedback + Copy buttons - Always visible (unless hidden) */}

@@ -13,6 +13,12 @@ import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
 
+interface GraphNode {
+    id: string;
+    label: string;
+    isDirection?: boolean;
+}
+
 interface NodeConversationPanelProps {
     isOpen: boolean;
     messages: MessagePayload[];
@@ -30,6 +36,10 @@ interface NodeConversationPanelProps {
     // Brief cache for sharing data between sidebar and modal
     briefCache?: Map<string, BriefState>;
     onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
+    // Direction nodes for clickable exploration
+    graphNodes?: GraphNode[];
+    onDirectionClick?: (nodeId: string) => void;
+    loadingNodeIds?: Set<string> | string[] | null;
 }
 
 /**
@@ -51,11 +61,19 @@ export function NodeConversationPanel({
     isRootNode = false,
     briefCache,
     onBriefCacheUpdate,
+    graphNodes,
+    onDirectionClick,
+    loadingNodeIds,
 }: NodeConversationPanelProps) {
     const panelRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const [inputValue, setInputValue] = useState('');
     const [showGist, setShowGist] = useState(false);
+
+    // Filter direction nodes for clickable bullets
+    const directionNodes = useMemo(() => {
+        return graphNodes?.filter(n => n.isDirection).map(n => ({ id: n.id, label: n.label })) || [];
+    }, [graphNodes]);
 
     // Trevi Brief states - derived from cache
     const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
@@ -272,6 +290,9 @@ export function NodeConversationPanel({
                                     content={msg.content}
                                     citations={citations}
                                     nodeId={nodeId}
+                                    directionNodes={msg.role === 'assistant' ? directionNodes : undefined}
+                                    onDirectionClick={msg.role === 'assistant' ? onDirectionClick : undefined}
+                                    loadingNodeIds={msg.role === 'assistant' ? loadingNodeIds : undefined}
                                 />
                             ))}
                         </div>
@@ -350,11 +371,19 @@ export function NodeConversationModal({
     isRootNode = false,
     briefCache,
     onBriefCacheUpdate,
+    graphNodes,
+    onDirectionClick,
+    loadingNodeIds,
 }: NodeConversationPanelProps) {
     const modalRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const [inputValue, setInputValue] = useState('');
     const [showGist, setShowGist] = useState(false);
+
+    // Filter direction nodes for clickable bullets
+    const directionNodes = useMemo(() => {
+        return graphNodes?.filter(n => n.isDirection).map(n => ({ id: n.id, label: n.label })) || [];
+    }, [graphNodes]);
 
     // Trevi Brief states - derived from cache
     const briefState = nodeId ? briefCache?.get(nodeId) : undefined;
@@ -595,6 +624,9 @@ export function NodeConversationModal({
                                         content={msg.content}
                                         citations={citations}
                                         nodeId={nodeId}
+                                        directionNodes={msg.role === 'assistant' ? directionNodes : undefined}
+                                        onDirectionClick={msg.role === 'assistant' ? onDirectionClick : undefined}
+                                        loadingNodeIds={msg.role === 'assistant' ? loadingNodeIds : undefined}
                                     />
                                 ))}
                             </div>

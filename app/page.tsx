@@ -1370,6 +1370,9 @@ function HomeContent() {
             onBriefCacheUpdate={(nodeId, data) => {
               setBriefCache(prev => new Map(prev).set(nodeId, data));
             }}
+            graphNodes={graphNodes}
+            onDirectionClick={handleDirectionClick}
+            loadingNodeIds={loadingNodeIds}
           />
         </div>
       </main>
