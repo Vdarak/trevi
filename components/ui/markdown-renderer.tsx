@@ -178,7 +178,7 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
         .replace(/^## (.*$)/gm, '<h3 class="text-lg font-bold text-slate-900 mt-5 mb-3">$1</h3>')
         .replace(/^# (.*$)/gm, '<h2 class="text-xl font-bold text-slate-900 mt-6 mb-4">$1</h2>')
         .replace(/^> (.*$)/gm, '<blockquote class="border-l-4 border-blue-400 pl-3 italic text-slate-600 my-2">$1</blockquote>')
-        .replace(/^- (.*$)/gm, '<li class="ml-4 list-disc">$1</li>')
+        .replace(/^- (.*$)/gm, '<li class="ml-4 list-disc marker:text-slate-700" style="line-height: 1.5;">$1</li>')
         .replace(/`(.*?)`/g, '<code class="bg-slate-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>');
 
     // FOURTH: Restore links with proper HTML
@@ -246,22 +246,28 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
                 elements.push(
                     <li
                         key={`bullet-${idx}`}
-                        className="ml-4 list-disc"
+                        className="ml-4 list-disc marker:text-slate-700"
                     >
                         <button
                             onClick={() => onDirectionClick!(nodeId)}
                             disabled={isLoading}
                             className={`
-                                text-left w-full min-h-[44px] py-2 -ml-1 pl-1
+                                text-left w-full min-h-[44px] -ml-1 pl-1
                                 transition-colors rounded
                                 ${isLoading
                                     ? 'text-slate-400 cursor-wait'
                                     : 'text-blue-600 hover:text-blue-700 active:text-blue-800 cursor-pointer hover:underline active:bg-blue-50'
                                 }
                             `}
+                            style={{ 
+                                display: 'block',
+                                paddingTop: '0.125rem',
+                                paddingBottom: '0.125rem',
+                                lineHeight: '1.5'
+                            }}
                         >
                             {isLoading && (
-                                <span className="inline-block mr-2">
+                                <span className="inline-block mr-2 align-middle">
                                     <svg className="animate-spin h-3 w-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
