@@ -201,10 +201,10 @@ export function ChatInterface({ onSendMessage, isLoading, statusMessage }: ChatI
       {/* Hero Text - Responsive sizing */}
       <div className="text-center mb-4 sm:mb-6 md:mb-8 mt-4 lg:mb-10 flex-shrink-0">
         <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold tracking-tight mb-2 sm:mb-3 md:mb-4 text-slate-900">
-          What are you <GradientText colors={["#023fe7ff", "#2563eb", "#3b82f6", "#2563eb", "#023fe7ff"]} animationSpeed={4} className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold">curious</GradientText> about?
+          Go <GradientText colors={["#023fe7ff", "#2563eb", "#3b82f6", "#2563eb", "#023fe7ff"]} animationSpeed={4} className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold">beyond</GradientText> quick answers.
         </h1>
         <p className="text-slate-500 text-sm sm:text-base md:text-lg lg:text-xl px-2">
-          Research and explore <span className="font-bold text-slate-700">your</span> curiosity to the deepest levels
+          Expert-guided <span className="font-bold text-slate-700">research</span> that prioritizes <span className="font-bold text-slate-700">sources</span>, thoughtful <span className="font-bold text-slate-700">structure</span>, and real <span className="font-bold text-slate-700">learning</span>.
         </p>
       </div>
 

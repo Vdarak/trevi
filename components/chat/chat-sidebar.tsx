@@ -90,6 +90,7 @@ export function ChatSidebar({
     const [bibliography, setBibliography] = useState<BibliographyResponse | null>(null);
     const [isLoadingBibliography, setIsLoadingBibliography] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [isDownloadingBrief, setIsDownloadingBrief] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     // Trevi Brief states - derived from cache
@@ -98,23 +99,25 @@ export function ChatSidebar({
     const isBriefLoading = briefState?.isLoading || false;
     const briefConnectionRef = useRef<AbortController | null>(null);
 
-    // Reset showBrief when switching nodes (optional, but good UX)
+    // Reset showGist when switching nodes - close if the new node doesn't have gist data
     React.useEffect(() => {
         if (activeNodeId) {
-            // If we want to keep brief open if it exists, remove this.
-            // But usually switching nodes should probably close the brief unless purely syncing.
-            // For now, let's NOT auto-close it if data exists, but user asked for sync.
-            // Actually, if I switch nodes, I probably want to see the brief if I had it open...
-            // BUT, if I switch to a new node that doesn't have a brief, showing an empty brief might be annoying?
-            // The prompt says "When clicked on brief in sidebar it should automatically update on the modal".
-            // It doesn't strictly say "openness" is synced, but "update".
-            // Let's keep `showGist` local for now, but ensure data syncs.
-            // Correction: The prompt says "black ones... should not be visible or open".
-            // So for root nodes, force close.
             const isRoot = conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
-            if (isRoot) setShowGist(false);
+            // Close gist for root nodes
+            if (isRoot) {
+                setShowGist(false);
+                return;
+            }
+            // If gist is open but the new node has no cached data and is not loading, close it
+            // This handles the edge case where user switches to a node without gist generated
+            const nodeBriefState = briefCache?.get(activeNodeId);
+            const hasGistData = nodeBriefState?.data != null;
+            const isLoading = nodeBriefState?.isLoading || false;
+            if (showGist && !hasGistData && !isLoading) {
+                setShowGist(false);
+            }
         }
-    }, [activeNodeId, conversationNodes]);
+    }, [activeNodeId, conversationNodes, briefCache, showGist]);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -419,23 +422,34 @@ export function ChatSidebar({
                                                 animate={{ scale: 1, opacity: 1 }}
                                                 exit={{ scale: 0, opacity: 0 }}
                                                 transition={{ duration: 0.15, ease: "easeOut" }}
-                                                onClick={() => {
-                                                    if (chatId && activeNodeId && !isBriefLoading) {
-                                                        downloadBrief(chatId, activeNodeId).catch((err) => {
+                                                onClick={async () => {
+                                                    if (chatId && activeNodeId && !isBriefLoading && !isDownloadingBrief) {
+                                                        setIsDownloadingBrief(true);
+                                                        try {
+                                                            await downloadBrief(chatId, activeNodeId);
+                                                        } catch (err) {
                                                             console.error('Download failed:', err);
-                                                        });
+                                                        } finally {
+                                                            setIsDownloadingBrief(false);
+                                                        }
                                                     }
                                                 }}
-                                                disabled={isBriefLoading}
+                                                disabled={isBriefLoading || isDownloadingBrief}
                                                 className={cn(
-                                                    "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none bg-white border-slate-200 transition-colors overflow-hidden",
+                                                    "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none transition-colors overflow-hidden",
                                                     isBriefLoading
-                                                        ? "text-slate-300 cursor-not-allowed"
-                                                        : "text-blue-600 hover:border-blue-200 hover:bg-blue-50/50"
+                                                        ? "bg-blue-400 text-white border-blue-500 cursor-not-allowed"
+                                                        : isDownloadingBrief
+                                                            ? "bg-blue-700 text-white border-blue-800 shadow-inner cursor-wait"
+                                                            : "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
                                                 )}
-                                                title={isBriefLoading ? "Generating gist..." : "Download Brief as PDF"}
+                                                title={isBriefLoading ? "Generating gist..." : isDownloadingBrief ? "Downloading..." : "Download Brief as PDF"}
                                             >
-                                                <Download className="w-4 h-4 flex-shrink-0" />
+                                                {isDownloadingBrief ? (
+                                                    <Loader2 className="w-4 h-4 flex-shrink-0 text-white animate-spin" />
+                                                ) : (
+                                                    <Download className="w-4 h-4 flex-shrink-0 text-white" />
+                                                )}
                                             </motion.button>
                                         )}
                                     </AnimatePresence>
@@ -489,10 +503,12 @@ export function ChatSidebar({
                                             "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
                                             showGist ? "rounded-r-lg" : "rounded-lg",
                                             isBriefLoading
-                                                ? "bg-white text-blue-600 border-slate-200"
-                                                : briefData
-                                                    ? "bg-blue-100 text-blue-600 border-blue-200 shadow-inner"
-                                                    : "bg-white text-blue-600 border-slate-200 hover:border-blue-200 hover:bg-blue-50/50"
+                                                ? "bg-blue-500 text-white border-blue-600"
+                                                : showGist
+                                                    ? "bg-blue-700 text-white border-blue-800 shadow-inner"
+                                                    : briefData
+                                                        ? "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
+                                                        : "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
                                         )}
                                         title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
                                     >
@@ -506,13 +522,13 @@ export function ChatSidebar({
                                                     animate={{ opacity: [0.3, 1, 0.3] }}
                                                     transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                                                 >
-                                                    <Sparkle className="w-4 h-4 fill-blue-600 text-blue-600" />
+                                                    <Sparkle className="w-4 h-4 fill-white text-white" />
                                                 </motion.span>
                                             </motion.span>
                                         ) : briefData ? (
-                                            <Sparkle className={`w-4 h-4 fill-blue-600 text-blue-600 transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
+                                            <Sparkle className={`w-4 h-4 fill-white text-white transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
                                         ) : (
-                                            <Sparkle className="w-4 h-4 stroke-blue-600" strokeWidth={2} />
+                                            <Sparkle className="w-4 h-4 text-white" strokeWidth={2} />
                                         )}
                                         <span>Gist</span>
                                     </button>

@@ -4,6 +4,8 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMe
 import type { Citation } from '@/lib/api';
 // Import centralized components from citation-tooltip.tsx
 import { SmartCitationTooltip, findSnippetForCitation } from '../graph/ui/citation-tooltip';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 interface DirectionNode {
     id: string;
@@ -21,8 +23,74 @@ interface MarkdownRendererProps {
 /**
  * Shared Markdown Renderer Component
  * Renders markdown content with styled headers, lists, blockquotes, code blocks,
- * and intelligent citation tooltips.
+ * mathematical equations (via KaTeX), and intelligent citation tooltips.
  */
+
+// Helper function to safely render math expressions with KaTeX
+function renderMath(expression: string, displayMode: boolean): string {
+    try {
+        return katex.renderToString(expression, {
+            displayMode,
+            throwOnError: false,
+            strict: false,
+            trust: true,
+        });
+    } catch (e) {
+        console.error('KaTeX rendering error:', e);
+        // Return the original expression wrapped in code tags as fallback
+        return `<code class="bg-red-50 text-red-600 px-1 rounded">${expression}</code>`;
+    }
+}
+
+// Process math expressions in text and return processed text with placeholders
+function processMathExpressions(text: string): { processedText: string; mathBlocks: string[] } {
+    const mathBlocks: string[] = [];
+    let processedText = text;
+
+    // Process block math first: $$...$$ or \[...\]
+    // Handle $$ ... $$ (can span multiple lines)
+    processedText = processedText.replace(/\$\$([\s\S]+?)\$\$/g, (match, expression) => {
+        const rendered = renderMath(expression.trim(), true);
+        mathBlocks.push(`<div class="my-4 overflow-x-auto">${rendered}</div>`);
+        return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
+    });
+
+    // Handle \[ ... \] (display math)
+    processedText = processedText.replace(/\\\[([\s\S]+?)\\\]/g, (match, expression) => {
+        const rendered = renderMath(expression.trim(), true);
+        mathBlocks.push(`<div class="my-4 overflow-x-auto">${rendered}</div>`);
+        return `__MATH_BLOCK_${mathBlocks.length - 1}__`;
+    });
+
+    // Process inline math: $...$ or \(...\)
+    // Handle single $ ... $ (but not $$)
+    // Use negative lookbehind/lookahead to avoid matching $$ 
+    processedText = processedText.replace(/(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g, (match, expression) => {
+        const rendered = renderMath(expression.trim(), false);
+        mathBlocks.push(`<span class="inline-block align-middle">${rendered}</span>`);
+        return `__MATH_INLINE_${mathBlocks.length - 1}__`;
+    });
+
+    // Handle \( ... \) (inline math)
+    processedText = processedText.replace(/\\\(([^)]+?)\\\)/g, (match, expression) => {
+        const rendered = renderMath(expression.trim(), false);
+        mathBlocks.push(`<span class="inline-block align-middle">${rendered}</span>`);
+        return `__MATH_INLINE_${mathBlocks.length - 1}__`;
+    });
+
+    return { processedText, mathBlocks };
+}
+
+// Restore math placeholders with rendered HTML
+function restoreMathExpressions(text: string, mathBlocks: string[]): string {
+    let result = text;
+    for (let i = 0; i < mathBlocks.length; i++) {
+        result = result.replace(`__MATH_BLOCK_${i}__`, mathBlocks[i]);
+        result = result.replace(`__MATH_INLINE_${i}__`, mathBlocks[i]);
+    }
+    return result;
+}
+
 export function MarkdownRenderer({ content, citations, directionNodes, onDirectionClick, loadingNodeIds }: MarkdownRendererProps) {
     // Helper: Fuzzy matching for direction node labels
     const fuzzyMatchDirectionNode = (bulletText: string): DirectionNode | null => {
@@ -82,7 +150,9 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
         return null;
     };
 
-    let processedText = content;
+    // FIRST: Process math expressions before anything else
+    const { processedText: mathProcessedText, mathBlocks } = processMathExpressions(content);
+    let processedText = mathProcessedText;
 
     // SPECIAL: Detect and process "Areas to Explore" sections with clickable bullets
     if (directionNodes && directionNodes.length > 0 && onDirectionClick) {
@@ -190,6 +260,9 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
         );
     }
 
+    // Restore math expressions
+    processedText = restoreMathExpressions(processedText, mathBlocks);
+
     // If no citations and no clickable bullets, use simple HTML rendering
     const hasClickableBullets = processedText.includes('__CLICKABLE_BULLET_');
 
@@ -259,7 +332,7 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
                                     : 'text-blue-600 hover:text-blue-700 active:text-blue-800 cursor-pointer hover:underline active:bg-blue-50'
                                 }
                             `}
-                            style={{ 
+                            style={{
                                 display: 'block',
                                 paddingTop: '0.125rem',
                                 paddingBottom: '0.125rem',
@@ -297,7 +370,9 @@ export function MarkdownRenderer({ content, citations, directionNodes, onDirecti
  * Used in graph nodes where function-based rendering is preferred.
  */
 export function renderSimpleMarkdown(text: string, citationsData?: Citation[]): React.ReactNode {
-    let processedText = text;
+    // FIRST: Process math expressions before anything else
+    const { processedText: mathProcessedText, mathBlocks } = processMathExpressions(text);
+    let processedText = mathProcessedText;
 
     // FIRST: Handle standalone reference numbers [n] BEFORE other processing
     processedText = processedText.replace(/\[\s*(\d+)\s*\]/g, '__REF_$1__');
@@ -344,6 +419,9 @@ export function renderSimpleMarkdown(text: string, citationsData?: Citation[]): 
             `<a href="${link.url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline cursor-pointer">${link.text}</a>`
         );
     }
+
+    // Restore math expressions
+    processedText = restoreMathExpressions(processedText, mathBlocks);
 
     // If no citations, use simple HTML rendering
     if (extractedCitations.length === 0) {
