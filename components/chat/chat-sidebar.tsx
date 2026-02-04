@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Send, Loader2, MessageSquare, Route, BookOpen, GripVertical, Sparkle, Check, Download, BookDown } from 'lucide-react';
+import { X, GripVertical, BookDown, Loader2, Route, MessageSquare, BookOpen, Send } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageBubble } from './message-bubble';
-import { TreviLogoAnimation } from '@/components/ui/trevi-logo';
 import { StatusLine } from '@/components/ui/status-line';
 import { QuickFeedback } from '@/components/feedback/quick-feedback';
 import { ShareLinkButton } from '@/components/ui/share-link-button';
 import { cn } from '@/lib/utils';
 import { GistCard } from '@/components/chat/gist-card';
-import { getBibliography, fetchTreviBrief, downloadBrief, downloadConversation, type MessagePayload, type Citation, type BibliographyResponse, type TreviBriefResponse } from '@/lib/api';
+import { GistNotch } from '@/components/chat/shared/gist-notch';
+import { ChatTabs, type TabDefinition } from '@/components/chat/shared/chat-tabs';
+import { BibliographyList } from '@/components/chat/shared/bibliography-list';
+import { NodeLabelBadge } from '@/components/chat/shared/node-label-badge';
+import { getBibliography, fetchTreviBrief, downloadBrief, downloadConversation, type MessagePayload, type Citation, type BibliographyResponse } from '@/lib/api';
 import type { BriefState } from '@/components/graph/types';
 
 interface ConversationNode {
@@ -42,16 +45,14 @@ interface ChatSidebarProps {
     onSendMessage: (message: string) => void;
     onEditMessage?: (nodeId: string, newMessage: string) => void;
     onClose: () => void;
-    // Brief cache for sharing data between sidebar and modal
     briefCache?: Map<string, BriefState>;
     onBriefCacheUpdate?: (nodeId: string, data: BriefState) => void;
-    // Direction nodes for clickable exploration
     graphNodes?: GraphNode[];
     onDirectionClick?: (nodeId: string) => void;
     loadingNodeIds?: Set<string> | string[] | null;
 }
 
-const tabs = [
+const tabs: TabDefinition[] = [
     { id: 'thread' as TabType, label: 'Thread', icon: Route },
     { id: 'full' as TabType, label: 'Full', icon: MessageSquare },
     { id: 'bibliography' as TabType, label: 'Bibliography', icon: BookOpen },
@@ -99,17 +100,14 @@ export function ChatSidebar({
     const isBriefLoading = briefState?.isLoading || false;
     const briefConnectionRef = useRef<AbortController | null>(null);
 
-    // Reset showGist when switching nodes - close if the new node doesn't have gist data
+    // Reset showGist when switching nodes
     React.useEffect(() => {
         if (activeNodeId) {
             const isRoot = conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
-            // Close gist for root nodes
             if (isRoot) {
                 setShowGist(false);
                 return;
             }
-            // If gist is open but the new node has no cached data and is not loading, close it
-            // This handles the edge case where user switches to a node without gist generated
             const nodeBriefState = briefCache?.get(activeNodeId);
             const hasGistData = nodeBriefState?.data != null;
             const isLoading = nodeBriefState?.isLoading || false;
@@ -125,19 +123,17 @@ export function ChatSidebar({
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const sidebarRef = useRef<HTMLDivElement>(null);
 
-    // Detect mobile and set default tab
+    // Detect mobile
     useEffect(() => {
         const handleResize = () => {
-            const mobile = window.innerWidth < 768; // md breakpoint in Tailwind is 768px
+            const mobile = window.innerWidth < 768;
             setIsMobile(mobile);
-            // Set default tab to 'full' on mobile, 'thread' on desktop
             if (mobile) {
                 setActiveTab('full');
             } else {
                 setActiveTab('thread');
             }
         };
-
         handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
@@ -165,20 +161,16 @@ export function ChatSidebar({
 
     useEffect(() => {
         if (!isResizing) return;
-
         const handleMouseMove = (e: MouseEvent) => {
             const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
             const newWidth = window.innerWidth - e.clientX;
             setWidth(Math.min(Math.max(newWidth, MIN_WIDTH), maxWidth));
         };
-
         const handleMouseUp = () => setIsResizing(false);
-
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
-
         return () => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
@@ -187,49 +179,47 @@ export function ChatSidebar({
         };
     }, [isResizing]);
 
-    // Get current nodes based on active tab
     const currentNodes = useMemo(() => {
         return activeTab === 'thread' ? threadNodes : conversationNodes;
     }, [activeTab, threadNodes, conversationNodes]);
 
-    // Filter direction nodes from graph for clickable bullets
     const directionNodes = useMemo(() => {
         return graphNodes?.filter(n => n.isDirection).map(n => ({ id: n.id, label: n.label })) || [];
     }, [graphNodes]);
 
-    // Title based on active tab
     const currentTitle = activeTab === 'thread' && activeLabel ? activeLabel : rootLabel;
 
-    // Check if active node is a root node (first node = root, no brief history)
+    // Check if active node is root - hide gist button for root
     const isRootNode = useMemo(() => {
         if (!activeNodeId) return true;
-        // Root is the first node in the conversation
         return conversationNodes.length > 0 && conversationNodes[0].id === activeNodeId;
     }, [activeNodeId, conversationNodes]);
 
-    // Auto-scroll to active node or top/bottom
+    // Show gist notch only on Thread tab (not Full or Bibliography) and not for root node
+    const showGistNotch = activeTab === 'thread' && !isRootNode;
+
+    const allCitations = useMemo(() => {
+        return [...conversationNodes, ...threadNodes].flatMap(node => node.citations || []);
+    }, [conversationNodes, threadNodes]);
+
+    // Auto-scroll
     useEffect(() => {
-        if (isStreaming) return; // Don't interfere with streaming scroll
+        if (isStreaming) return;
         const timeoutId = setTimeout(() => {
             if (activeNodeId && nodeRefs.current.has(activeNodeId)) {
-                // Scenario A: Node exists in list - Scroll to it
                 nodeRefs.current.get(activeNodeId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } else if (activeNodeId) {
-                // Scenario B: Node is active (e.g. Exploring/Follow-up) but not in list (e.g. empty payload)
-                // Scroll to BOTTOM to show the parent context (last rendered node) + any loading indicators
                 messagesContainerRef.current?.scrollTo({
                     top: messagesContainerRef.current?.scrollHeight || 0,
                     behavior: 'smooth'
                 });
             } else {
-                // Scenario C: No active node - Scroll to top
                 messagesContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
             }
         }, 150);
         return () => clearTimeout(timeoutId);
     }, [activeNodeId, activeTab, isStreaming]);
 
-    // Scroll to bottom when streaming/exploring starts (with longer delay for sidebar animation)
     useEffect(() => {
         if (isStreaming && isOpen) {
             const timeoutId = setTimeout(() => {
@@ -237,7 +227,7 @@ export function ChatSidebar({
                     top: messagesContainerRef.current?.scrollHeight || 0,
                     behavior: 'smooth'
                 });
-            }, 350); // Longer delay to wait for sidebar animation
+            }, 350);
             return () => clearTimeout(timeoutId);
         }
     }, [isStreaming, isOpen]);
@@ -251,14 +241,12 @@ export function ChatSidebar({
             .finally(() => setIsLoadingBibliography(false));
     }, [chatId]);
 
-    // Fetch bibliography when tab becomes active
     useEffect(() => {
         if (activeTab === 'bibliography' && isOpen && chatId) {
             fetchBibliography();
         }
     }, [activeTab, isOpen, chatId, fetchBibliography]);
 
-    // Focus input when sidebar opens
     useEffect(() => {
         if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
     }, [isOpen]);
@@ -271,7 +259,58 @@ export function ChatSidebar({
         }
     };
 
-    // Don't render on desktop if not open
+    // Handle gist toggle with fetch and width adjustment
+    const handleGistToggle = () => {
+        const newState = !showGist;
+
+        if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
+            onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: true });
+
+            const controller = new AbortController();
+            briefConnectionRef.current = controller;
+
+            fetchTreviBrief(
+                chatId,
+                activeNodeId,
+                undefined,
+                (response) => {
+                    onBriefCacheUpdate?.(activeNodeId, { data: response.trevi_brief, isLoading: false });
+                },
+                (error) => {
+                    console.error('Trevi Brief error:', error);
+                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: error.error });
+                },
+                { signal: controller.signal }
+            ).catch((err) => {
+                if (err.name !== 'AbortError') {
+                    console.error('Trevi Brief fetch failed:', err);
+                    onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
+                }
+            });
+        }
+
+        setShowGist(newState);
+        if (newState) {
+            const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
+            setWidth(maxWidth);
+        } else {
+            setWidth(MIN_WIDTH);
+        }
+    };
+
+    const handleGistDownload = async () => {
+        if (chatId && activeNodeId && !isBriefLoading && !isDownloadingBrief) {
+            setIsDownloadingBrief(true);
+            try {
+                await downloadBrief(chatId, activeNodeId);
+            } catch (err) {
+                console.error('Download failed:', err);
+            } finally {
+                setIsDownloadingBrief(false);
+            }
+        }
+    };
+
     if (!shouldRender) return null;
 
     return (
@@ -291,37 +330,32 @@ export function ChatSidebar({
                 id="chat-sidebar-container"
                 ref={sidebarRef}
                 style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? width : undefined }}
-                className={`
-                    fixed inset-0 z-50 h-[100dvh]
-                    md:relative md:inset-auto md:z-auto md:h-auto
-                    bg-white flex flex-col
-                    w-full md:min-w-[400px] md:max-w-[50vw]
-                    md:border-l md:border-slate-200
-                    transition-transform duration-300 ease-out
-                    ${isVisible ? 'translate-x-0' : 'translate-x-full'}
-                `}
+                className={cn(
+                    "fixed inset-0 z-50 h-[100dvh]",
+                    "md:relative md:inset-auto md:z-auto md:h-auto",
+                    "bg-white flex flex-col",
+                    "w-full md:min-w-[400px] md:max-w-[50vw]",
+                    "md:border-l md:border-slate-200",
+                    "transition-transform duration-300 ease-out",
+                    !isResizing && "md:transition-[transform,width]",
+                    isVisible ? "translate-x-0" : "translate-x-full"
+                )}
             >
-                {/* Resize Handle - Desktop only */}
+                {/* Resize Handle */}
                 <div
                     onMouseDown={handleMouseDown}
                     className={`
-                        hidden md:flex
-                        absolute left-0 top-0 bottom-0 w-1 
-                        cursor-col-resize group z-50
-                        items-center justify-center
-                        hover:bg-blue-500/10
-                        ${isResizing ? 'bg-blue-500/20' : ''}
+                        hidden md:flex absolute left-0 top-0 bottom-0 w-1 
+                        cursor-col-resize group z-50 items-center justify-center
+                        hover:bg-blue-500/10 ${isResizing ? 'bg-blue-500/20' : ''}
                     `}
                 >
-                    {/* Resize indicator */}
                     <div className={`
                         absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                        flex items-center justify-center
-                        w-4 h-8 rounded-full
+                        flex items-center justify-center w-4 h-8 rounded-full
                         bg-white border border-slate-200 shadow-sm
                         text-slate-400 group-hover:text-blue-500 group-hover:border-blue-300
-                        transition-colors
-                        ${isResizing ? 'text-blue-500 border-blue-300' : ''}
+                        transition-colors ${isResizing ? 'text-blue-500 border-blue-300' : ''}
                     `}>
                         <GripVertical className="w-3 h-3" />
                     </div>
@@ -332,65 +366,16 @@ export function ChatSidebar({
                     {/* Tab Bar */}
                     <div className="flex items-center h-12 sm:h-14 px-1">
                         <div className="flex-1 flex min-w-0 overflow-hidden">
-                            {tabs.map((tab) => {
-                                const Icon = tab.icon;
-                                const isActive = activeTab === tab.id;
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => {
-                                            if (tab.id === 'bibliography' && isActive) {
-                                                fetchBibliography();
-                                            }
-                                            setActiveTab(tab.id);
-                                        }}
-                                        className={`
-                                            relative flex items-center justify-center gap-2 px-3 py-3
-                                            text-sm font-medium transition-colors whitespace-nowrap
-                                            ${isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}
-                                        `}
-                                    >
-                                        <Icon className="w-5 h-5" />
-                                        {isActive && <span>{tab.label}</span>}
-                                        {isActive && (
-                                            <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-600 rounded-full" />
-                                        )}
-                                    </button>
-                                );
-                            })}
+                            <ChatTabs
+                                tabs={tabs}
+                                activeTab={activeTab}
+                                onTabChange={(id) => setActiveTab(id as TabType)}
+                                onRefetch={(id) => {
+                                    if (id === 'bibliography') fetchBibliography();
+                                }}
+                            />
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-                            {activeTab === 'thread' && (
-                                <>
-                                    <button
-                                        onClick={async () => {
-                                            if (chatId && activeNodeId && !isDownloadingPdf) {
-                                                setIsDownloadingPdf(true);
-                                                try {
-                                                    await downloadConversation(chatId, activeNodeId);
-                                                } catch (err) {
-                                                    console.error('Download failed:', err);
-                                                } finally {
-                                                    setIsDownloadingPdf(false);
-                                                }
-                                            }
-                                        }}
-                                        disabled={!chatId || !activeNodeId || isDownloadingPdf}
-                                        className="p-2 rounded-lg text-blue-600 hover:text-blue-600 hover:bg-blue-50 active:bg-blue-100 active:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title="Download conversation as PDF"
-                                    >
-                                        {isDownloadingPdf ? (
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                        ) : (
-                                            <BookDown className="w-5 h-5" />
-                                        )}
-                                    </button>
-                                    <ShareLinkButton
-                                        chatId={chatId}
-                                        nodeId={activeNodeId}
-                                    />
-                                </>
-                            )}
                             <QuickFeedback
                                 context="component"
                                 componentName="chat_sidebar"
@@ -406,166 +391,86 @@ export function ChatSidebar({
                         </div>
                     </div>
 
-                    {/* Context Title */}
+                    {/* Context Title with Share/Download Buttons - visible on Thread and Full tabs */}
                     {activeTab !== 'bibliography' && (
-                        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-700 truncate flex-1">{currentTitle}</p>
-
-                            {/* Trevi Brief Toggle - hidden for root nodes */}
-                            {!isRootNode && (
-                                <div className="flex items-center">
-                                    {/* Download Button - animated reveal when Gist is open */}
-                                    <AnimatePresence>
-                                        {showGist && (
-                                            <motion.button
-                                                initial={{ scale: 0, opacity: 0 }}
-                                                animate={{ scale: 1, opacity: 1 }}
-                                                exit={{ scale: 0, opacity: 0 }}
-                                                transition={{ duration: 0.15, ease: "easeOut" }}
-                                                onClick={async () => {
-                                                    if (chatId && activeNodeId && !isBriefLoading && !isDownloadingBrief) {
-                                                        setIsDownloadingBrief(true);
-                                                        try {
-                                                            await downloadBrief(chatId, activeNodeId);
-                                                        } catch (err) {
-                                                            console.error('Download failed:', err);
-                                                        } finally {
-                                                            setIsDownloadingBrief(false);
-                                                        }
-                                                    }
-                                                }}
-                                                disabled={isBriefLoading || isDownloadingBrief}
-                                                className={cn(
-                                                    "flex items-center justify-center px-2.5 py-1.5 rounded-l-lg border border-r-0 text-xs font-semibold select-none transition-colors overflow-hidden",
-                                                    isBriefLoading
-                                                        ? "bg-blue-400 text-white border-blue-500 cursor-not-allowed"
-                                                        : isDownloadingBrief
-                                                            ? "bg-blue-700 text-white border-blue-800 shadow-inner cursor-wait"
-                                                            : "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
-                                                )}
-                                                title={isBriefLoading ? "Generating gist..." : isDownloadingBrief ? "Downloading..." : "Download Brief as PDF"}
-                                            >
-                                                {isDownloadingBrief ? (
-                                                    <Loader2 className="w-4 h-4 flex-shrink-0 text-white animate-spin" />
-                                                ) : (
-                                                    <Download className="w-4 h-4 flex-shrink-0 text-white" />
-                                                )}
-                                            </motion.button>
-                                        )}
-                                    </AnimatePresence>
+                        <div className="flex items-center justify-between px-4 py-2.5 min-h-[56px] bg-slate-50 border-t border-slate-100">
+                            <p className="text-sm font-semibold text-slate-700 truncate flex-1 min-w-0">{currentTitle}</p>
+                            {/* Only show buttons on Thread tab */}
+                            {activeTab === 'thread' && (
+                                <div className="flex items-center gap-1 flex-shrink-0 ml-3">
                                     <button
-                                        onClick={() => {
-                                            const newState = !showGist;
-
-                                            // If opening brief for the first time and no data, fetch it
-                                            if (newState && !briefData && !isBriefLoading && chatId && activeNodeId) {
-                                                // Set loading state in cache immediately
-                                                onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: true });
-
-                                                // Create AbortController for cleanup
-                                                const controller = new AbortController();
-                                                briefConnectionRef.current = controller;
-
-                                                fetchTreviBrief(
-                                                    chatId,
-                                                    activeNodeId,
-                                                    undefined, // No progressive updates for now
-                                                    (response) => {
-                                                        // Update parent cache with data
-                                                        onBriefCacheUpdate?.(activeNodeId, { data: response.trevi_brief, isLoading: false });
-                                                    },
-                                                    (error) => {
-                                                        console.error('Trevi Brief error:', error);
-                                                        // Update parent cache with error
-                                                        onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: error.error });
-                                                    },
-                                                    { signal: controller.signal }
-                                                ).catch((err) => {
-                                                    // Handle abort or other errors
-                                                    if (err.name !== 'AbortError') {
-                                                        console.error('Trevi Brief fetch failed:', err);
-                                                        onBriefCacheUpdate?.(activeNodeId, { data: null, isLoading: false, error: err instanceof Error ? err.message : 'Unknown error' });
-                                                    }
-                                                });
-                                            }
-
-                                            setShowGist(newState);
-                                            if (newState) {
-                                                // Auto-resize to MAXIMUM allowed width when opening brief
-                                                const maxWidth = window.innerWidth * (MAX_WIDTH_VW / 100);
-                                                setWidth(maxWidth);
-                                            } else {
-                                                // Optional: Shrink back? User requested: "when trevi brief is closed, automatically resize the chat side bar to minimum width"
-                                                setWidth(MIN_WIDTH);
+                                        onClick={async () => {
+                                            if (chatId && activeNodeId && !isDownloadingPdf) {
+                                                setIsDownloadingPdf(true);
+                                                try {
+                                                    await downloadConversation(chatId, activeNodeId);
+                                                } catch (err) {
+                                                    console.error('Download failed:', err);
+                                                } finally {
+                                                    setIsDownloadingPdf(false);
+                                                }
                                             }
                                         }}
-                                        className={cn(
-                                            "flex items-center gap-1.5 px-3 py-1.5 transition-all duration-200 border text-xs font-semibold select-none",
-                                            showGist ? "rounded-r-lg" : "rounded-lg",
-                                            isBriefLoading
-                                                ? "bg-blue-500 text-white border-blue-600"
-                                                : showGist
-                                                    ? "bg-blue-700 text-white border-blue-800 shadow-inner"
-                                                    : briefData
-                                                        ? "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
-                                                        : "bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:border-blue-800"
-                                        )}
-                                        title={isBriefLoading ? "Generating..." : briefData ? "Gist Generated" : showGist ? "Close Gist" : "View Gist"}
+                                        disabled={!chatId || !activeNodeId || isDownloadingPdf}
+                                        className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Download conversation as PDF"
                                     >
-                                        {isBriefLoading ? (
-                                            <motion.span
-                                                animate={{ rotate: 360 }}
-                                                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                                                className="flex items-center justify-center"
-                                            >
-                                                <motion.span
-                                                    animate={{ opacity: [0.3, 1, 0.3] }}
-                                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                                >
-                                                    <Sparkle className="w-4 h-4 fill-white text-white" />
-                                                </motion.span>
-                                            </motion.span>
-                                        ) : briefData ? (
-                                            <Sparkle className={`w-4 h-4 fill-white text-white transition-transform duration-200 ${showGist ? "rotate-45" : ""}`} />
+                                        {isDownloadingPdf ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
                                         ) : (
-                                            <Sparkle className="w-4 h-4 text-white" strokeWidth={2} />
+                                            <BookDown className="w-5 h-5" />
                                         )}
-                                        <span>Gist</span>
                                     </button>
+                                    <ShareLinkButton chatId={chatId} nodeId={activeNodeId} />
                                 </div>
                             )}
                         </div>
                     )}
                 </header>
 
+                {/* Notch + Gist Content Container - positioned to float below header */}
+                {showGistNotch && (
+                    <div className="flex-shrink-0 relative">
+                        {/* Gist Content Expands HERE - before the notch in DOM */}
+                        <AnimatePresence>
+                            {showGist && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="bg-white border-b border-slate-200 shadow-sm overflow-hidden">
+                                        <GistCard
+                                            nodeLabel={currentTitle || "Thread Summary"}
+                                            onClose={() => {
+                                                setShowGist(false);
+                                                setWidth(MIN_WIDTH);
+                                            }}
+                                            className="border-none"
+                                            isLoading={isBriefLoading}
+                                            briefData={briefData}
+                                        />
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* GistNotch Component - floats over content below */}
+                        <GistNotch
+                            isOpen={showGist}
+                            isLoading={isBriefLoading}
+                            isDownloading={isDownloadingBrief}
+                            hasData={!!briefData}
+                            onToggle={handleGistToggle}
+                            onDownload={handleGistDownload}
+                        />
+                    </div>
+                )}
+
                 {/* Content Area */}
                 <main className="flex-1 overflow-hidden flex flex-col relative bg-white">
-
-                    {/* Trevi Brief Section (Shifts content down) */}
-                    <AnimatePresence>
-                        {showGist && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                className="flex-shrink-0 w-full min-w-0 overflow-hidden z-10 bg-slate-50/50 shadow-sm relative border-b border-blue-100"
-                            >
-                                <GistCard
-                                    nodeLabel={currentTitle || "Thread Summary"}
-                                    onClose={() => {
-                                        setShowGist(false);
-                                        setWidth(MIN_WIDTH); // Auto-shrink on close
-                                    }}
-                                    className="border-none"
-                                    isLoading={isBriefLoading}
-                                    briefData={briefData}
-                                />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Chat Layer */}
                     <div className="flex-1 min-h-0 relative">
                         <div
                             ref={messagesContainerRef}
@@ -574,117 +479,11 @@ export function ChatSidebar({
                         >
                             <div className="px-4 py-4 space-y-4">
                                 {activeTab === 'bibliography' ? (
-                                    isLoadingBibliography ? (
-                                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                            <Loader2 className="w-8 h-8 mb-3 animate-spin text-blue-500" />
-                                            <p className="text-sm font-medium">Loading bibliography...</p>
-                                        </div>
-                                    ) : bibliography && Object.keys(bibliography.reference_usage).length > 0 ? (
-                                        <div className="space-y-6">
-                                            {/* Helper to find citation details across all nodes */}
-                                            {(() => {
-                                                // Collect all unique citations keyed by URL
-                                                const urlToCitation = new Map<string, Citation>();
-
-                                                // Also map indices to URLs if needed, but primary key is URL from API
-                                                [...conversationNodes, ...threadNodes].forEach(node => {
-                                                    node.citations?.forEach(c => {
-                                                        if (c.url) urlToCitation.set(c.url, c);
-                                                    });
-                                                });
-
-                                                return Object.entries(bibliography.reference_usage).map(([url, labels], idx) => {
-                                                    const citation = urlToCitation.get(url);
-
-                                                    // The key is the URL itself
-                                                    const displayUrl = url;
-
-                                                    // Try to get a nice title, otherwise use the URL or domain
-                                                    let displayTitle = citation?.title;
-                                                    if (!displayTitle) {
-                                                        try {
-                                                            const urlObj = new URL(url);
-                                                            displayTitle = urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
-                                                        } catch (e) {
-                                                            displayTitle = url;
-                                                        }
-                                                    }
-
-                                                    // Filter out "No meaningful topic identified"
-                                                    const validLabels = labels.filter(label =>
-                                                        label !== "General"
-                                                    );
-
-                                                    // Use simple sequential numbering
-                                                    const displayIndex = idx + 1;
-
-                                                    return (
-                                                        <div key={url} className="group relative pl-0 sm:pl-0">
-                                                            <div className="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100/60 hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-200">
-                                                                {/* Index Badge */}
-                                                                <div className="flex-shrink-0">
-                                                                    <div className="
-                                                                        flex items-center justify-center 
-                                                                        w-6 h-6 rounded-md 
-                                                                        bg-white border border-slate-200 
-                                                                        text-xs font-mono font-medium text-slate-500
-                                                                        group-hover:border-blue-200 group-hover:text-blue-600
-                                                                        transition-colors
-                                                                    ">
-                                                                        {displayIndex}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Content */}
-                                                                <div className="flex-1 min-w-0 space-y-2">
-                                                                    {/* Title & Link */}
-                                                                    <div>
-                                                                        <a
-                                                                            href={url}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="group/link block"
-                                                                        >
-                                                                            <h4 className="text-sm font-semibold text-slate-800 leading-snug group-hover/link:text-blue-600 transition-colors line-clamp-2">
-                                                                                {displayTitle}
-                                                                            </h4>
-                                                                            <div className="text-xs text-slate-400 font-mono mt-1 w-full truncate opacity-70 group-hover/link:opacity-100 transition-all">
-                                                                                {displayUrl}
-                                                                            </div>
-                                                                        </a>
-                                                                    </div>
-
-                                                                    {/* Usage Labels */}
-                                                                    {validLabels.length > 0 && (
-                                                                        <div className="flex flex-wrap gap-2 pt-1">
-                                                                            {validLabels.map((label, labelIdx) => (
-                                                                                <span
-                                                                                    key={`${url}-${labelIdx}`}
-                                                                                    className="
-                                                                                        inline-flex items-center px-2 py-0.5 
-                                                                                        rounded-md text-[10px] uppercase tracking-wider font-semibold 
-                                                                                        bg-white border border-slate-200 text-slate-500
-                                                                                    "
-                                                                                >
-                                                                                    {label}
-                                                                                </span>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                                            <BookOpen className="w-10 h-10 mb-3 opacity-40" />
-                                            <p className="text-sm font-medium">No sources found</p>
-                                            <p className="text-xs mt-1 opacity-70">Bibliography is empty</p>
-                                        </div>
-                                    )
+                                    <BibliographyList
+                                        bibliography={bibliography}
+                                        citations={allCitations}
+                                        isLoading={isLoadingBibliography}
+                                    />
                                 ) : currentNodes.length === 0 && !isStreaming ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                                         <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
@@ -704,21 +503,9 @@ export function ChatSidebar({
                                                 data-node-id={node.id}
                                                 className={idx > 0 ? 'pt-4 border-t border-slate-100' : ''}
                                             >
-                                                {/* Node Label Badge */}
                                                 {currentNodes.length > 1 && (
-                                                    <div className={`
-                                                        inline-flex items-center gap-1.5 mb-3 px-2.5 py-1 
-                                                        rounded-full text-xs font-semibold
-                                                        ${node.id === activeNodeId
-                                                            ? 'text-blue-700'
-                                                            : 'text-slate-500'}
-                                                    `}>
-                                                        <span className={`w-1.5 h-1.5 rounded-full ${node.id === activeNodeId ? 'bg-blue-500' : 'bg-slate-400'}`} />
-                                                        {node.label}
-                                                    </div>
+                                                    <NodeLabelBadge label={node.label} isActive={node.id === activeNodeId} />
                                                 )}
-
-                                                {/* Messages */}
                                                 <div className="space-y-4">
                                                     {(node.payload || []).map((msg, msgIdx) => (
                                                         <MessageBubble
@@ -736,24 +523,13 @@ export function ChatSidebar({
                                             </section>
                                         ))}
 
-                                        {/* Optimistic User Message & Streaming Indicator */}
                                         {isStreaming && (
                                             <>
-                                                {/* Show user message immediately */}
                                                 <div className="pt-4 border-t border-slate-100 animate-fade-in">
-                                                    <MessageBubble
-                                                        role="user"
-                                                        content={streamUserMessage || statusMessage || ""}
-                                                    />
+                                                    <MessageBubble role="user" content={streamUserMessage || statusMessage || ""} />
                                                 </div>
-
-                                                {/* Status Line */}
                                                 <div className="py-2 animate-fade-in">
-                                                    <StatusLine
-                                                        status="exploring"
-                                                        title="Exploring"
-                                                        subtitle={statusMessage || "Processing..."}
-                                                    />
+                                                    <StatusLine status="exploring" title="Exploring" subtitle={statusMessage || "Processing..."} />
                                                 </div>
                                             </>
                                         )}
@@ -776,37 +552,19 @@ export function ChatSidebar({
                                 onChange={(e) => setInputValue(e.target.value)}
                                 placeholder="Ask a follow-up..."
                                 disabled={isStreaming}
-                                className="
-                                    flex-1 px-4 py-3 
-                                    rounded-xl border border-slate-200 
-                                    bg-slate-50 text-base text-slate-800 
-                                    placeholder:text-slate-400 
-                                    focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 
-                                    disabled:opacity-50 disabled:cursor-not-allowed 
-                                    transition-all
-                                "
+                                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             />
                             <button
                                 type="submit"
                                 disabled={!inputValue.trim() || isStreaming}
-                                className="
-                                    p-3 rounded-xl 
-                                    bg-slate-900 text-white 
-                                    hover:bg-slate-800 active:scale-95 
-                                    disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 
-                                    transition-all
-                                "
+                                className="p-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 transition-all"
                             >
-                                {isStreaming ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <Send className="w-5 h-5" />
-                                )}
+                                {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                             </button>
                         </div>
                     </form>
                 </footer>
-            </div >
+            </div>
         </>
     );
 }
