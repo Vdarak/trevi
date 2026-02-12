@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Sparkle, Download, Loader2 } from 'lucide-react';
+import { ScrollText, Download, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -86,27 +86,22 @@ export function GistNotch({
                                 >
                                     {isLoading ? (
                                         <motion.span
-                                            animate={{ rotate: 360 }}
-                                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                            animate={{ scale: [1, 1.15, 1], opacity: [0.5, 1, 0.5] }}
+                                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                                             className="flex items-center justify-center"
                                         >
-                                            <motion.span
-                                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                            >
-                                                <Sparkle className="w-4 h-4 fill-white text-white" />
-                                            </motion.span>
+                                            <ScrollText className="w-4 h-4 text-white" />
                                         </motion.span>
                                     ) : hasData ? (
                                         <motion.span
-                                            animate={{ rotate: isOpen ? 45 : 0 }}
+                                            animate={{ rotate: isOpen ? -10 : 0 }}
                                             transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                                             className="flex items-center justify-center"
                                         >
-                                            <Sparkle className="w-4 h-4 fill-white text-white" />
+                                            <ScrollText className="w-4 h-4 text-white" />
                                         </motion.span>
                                     ) : (
-                                        <Sparkle className="w-4 h-4 text-white" strokeWidth={2} />
+                                        <ScrollText className="w-4 h-4 text-white" />
                                     )}
                                     <span>Gist</span>
                                 </button>

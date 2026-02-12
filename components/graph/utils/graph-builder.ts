@@ -25,6 +25,7 @@ export function buildGraphFromResponses(responses: CompleteEvent[]): GraphNode[]
             id: response.node_id,
             label: response.label,
             summary: response.summary,
+            gistBullets: undefined, // Populated from graph API response, not CompleteEvent
             parentId: response.parent_node_id === "root" ? null : response.parent_node_id,
             isDirection: false,
         });

@@ -81,7 +81,7 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
 
     // Border radius - pill for root, rounded for others
     const radiusClass = data.isRoot
-        ? 'rounded-full'
+        ? 'rounded-xl'
         : isParentNode
             ? 'rounded-xl'
             : 'rounded-lg';
@@ -209,9 +209,19 @@ export function ConceptNode({ data, targetPosition, sourcePosition }: ConceptNod
 
                 {/* Node Content */}
                 <>
-                    {/* Node label */}
-                    <div className={`${textClass} text-center flex-1 ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
-                        {data.label}
+                    {/* Node Text Container - width determined by title (min-content) */}
+                    <div className="flex flex-col items-start min-w-0 w-min">
+                        {/* Node label - determines the width because it doesn't wrap */}
+                        <div className={`${textClass} text-left whitespace-nowrap ${data.isRoot ? "text-white" : data.isLoading ? "text-blue-600" : isParentNode ? "text-slate-700" : "text-slate-600"}`}>
+                            {data.label}
+                        </div>
+
+                        {/* Subtext (Gist Display) - wraps to match title width */}
+                        {data.subtext && (
+                            <div className={`mt-0.5 text-[10.5px] leading-tight text-left w-full whitespace-normal break-words line-clamp-3 ${data.isRoot ? "text-blue-100/90" : "text-slate-500"}`}>
+                                {data.subtext}
+                            </div>
+                        )}
                     </div>
 
                     {/* Explore icon for direction nodes - on right inside node */}

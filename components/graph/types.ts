@@ -9,6 +9,9 @@ export interface GraphNode {
     id: string;
     label: string;
     summary?: string;
+    gistBullets?: string[];
+    exploreSummary?: string; // For direction nodes: the summary from areas_to_explore
+    subtext?: string; // For conversation nodes: the conv_turn_gist_display
     parentId: string | null;
     isDirection?: boolean; // True if this is a direction node (clickable to explore)
     payload?: Array<{ role: 'user' | 'assistant'; content: string }>; // Message history for this node
@@ -66,6 +69,7 @@ export interface GlobalStatus {
 
 export interface ConceptNodeData {
     label: string;
+    subtext?: string;
     summary?: string;
     isHighlighted?: boolean;
     isInActivePath?: boolean;
@@ -116,7 +120,9 @@ export interface ToolbarButtonProps {
 }
 
 export interface TooltipProps {
-    content: string;
+    title: string;
+    bullets?: string[];
+    variant: 'gist' | 'simple'; // gist = conversation node, simple = direction node
     position: { x: number; y: number };
 }
 

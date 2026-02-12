@@ -103,7 +103,9 @@ export interface GraphNodeData {
   id: string;
   type: "root" | "conversation" | "direction";
   node_label: string;
-  display_summary?: string;
+  conv_turn_gist_display?: string;
+  conv_turn_gist?: string[];
+  areas_to_explore?: Array<{ label: string; summary: string }>;
   payload?: MessagePayload[];
   references?: string[];
   citations?: Citation[];
@@ -295,12 +297,12 @@ export async function getGraph(chatId: string): Promise<GraphResponse> {
  * Supports multiple root nodes (multiple independent graphs).
  */
 export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
-  nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }>;
+  nodes: Array<{ id: string; label: string; summary?: string; gistBullets?: string[]; exploreSummary?: string; subtext?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }>;
   currentNodeId: string;
   rootNodeId: string | null; // Primary root (first found) for backwards compatibility
   rootNodeIds: string[]; // All root nodes for multi-graph support
 } {
-  const nodes: Array<{ id: string; label: string; summary?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }> = [];
+  const nodes: Array<{ id: string; label: string; summary?: string; gistBullets?: string[]; exploreSummary?: string; subtext?: string; parentId: string | null; isDirection?: boolean; payload?: MessagePayload[]; citations?: Citation[] }> = [];
   const rootNodeIds: string[] = [];
 
   // Build a map of node ID to parent ID from edges
@@ -321,7 +323,10 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
     nodes.push({
       id: nodeData.id,
       label: nodeData.node_label,
-      summary: nodeData.display_summary,
+      subtext: nodeData.type === 'conversation' ? nodeData.conv_turn_gist_display : undefined,
+      summary: nodeData.conv_turn_gist_display,
+      gistBullets: nodeData.conv_turn_gist,
+      exploreSummary: nodeData.conv_turn_gist_display, // Use gist display for explore tooltip
       parentId: parentId === "root" ? null : parentId,
       isDirection: nodeData.type === "direction",
       payload: nodeData.payload,
@@ -331,6 +336,23 @@ export function buildGraphNodesFromResponse(graphResponse: GraphResponse): {
     // Collect all root nodes (parent is "root" or no parent)
     if (parentId === "root" || !parentId) {
       rootNodeIds.push(nodeData.id);
+    }
+  });
+
+  // Second pass: map areas_to_explore summaries from conversation nodes to their child direction nodes
+  const nodeById = new Map(graphResponse.graph.nodes.map(n => [n.id, n]));
+  nodes.forEach(node => {
+    if (node.isDirection && node.parentId) {
+      const parentData = nodeById.get(node.parentId);
+      if (parentData?.areas_to_explore) {
+        // Match by label (case-insensitive)
+        const match = parentData.areas_to_explore.find(
+          a => a.label.toLowerCase() === node.label.toLowerCase()
+        );
+        if (match) {
+          node.exploreSummary = match.summary;
+        }
+      }
     }
   });
 
@@ -1046,7 +1068,9 @@ export interface SharedChatNode {
   id: string;
   payload: MessagePayload[];
   node_label: string;
-  display_summary?: string;
+  conv_turn_gist_display?: string;
+  conv_turn_gist?: string[];
+  areas_to_explore?: Array<{ label: string; summary: string }>;
   type: 'conversation' | 'direction';
   citations?: Citation[];
   references?: string[];

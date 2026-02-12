@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Sparkle, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ScrollText, ArrowLeft, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 import { motion } from 'framer-motion';
@@ -120,11 +120,11 @@ export function GistCard({ nodeLabel, onClose, className, isLoading, briefData }
         return (
             <div className={cn("flex flex-col items-center justify-center w-full max-w-full bg-white py-8", className)}>
                 <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    animate={{ scale: [1, 1.15, 1], opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                     className="mb-4"
                 >
-                    <Sparkle className="w-12 h-12 text-blue-500 fill-blue-500" />
+                    <ScrollText className="w-12 h-12 text-blue-500" />
                 </motion.div>
                 <p className="text-sm text-slate-600 font-medium flex items-center">
                     Generating Gist<LoadingDots />
@@ -137,7 +137,7 @@ export function GistCard({ nodeLabel, onClose, className, isLoading, briefData }
     if (!briefData) {
         return (
             <div className={cn("flex flex-col items-center justify-center w-full max-w-full bg-white py-8", className)}>
-                <Sparkle className="w-12 h-12 text-slate-300 mb-4" />
+                <ScrollText className="w-12 h-12 text-slate-300 mb-4" />
                 <p className="text-sm text-slate-400 font-medium">No Gist available</p>
             </div>
         );

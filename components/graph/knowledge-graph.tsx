@@ -276,11 +276,24 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
     prevNodeCountRef.current = nodeCount;
   }, [loadingNodeIds, graphNodes.length, fitView]);
 
-  // Get the summary of hovered node
-  const hoveredSummary = useMemo(() => {
+  // Get the tooltip data for the hovered node (title + gist bullets)
+  const hoveredTooltipData = useMemo(() => {
     if (!hoveredNodeId) return null;
     const node = graphNodes.find((n) => n.id === hoveredNodeId);
-    return node?.summary || null;
+    if (!node) return null;
+
+    // Direction/explore nodes: simple tooltip with just the explore summary
+    if (node.isDirection) {
+      const displayText = node.exploreSummary || node.summary || node.label;
+      return { title: displayText, variant: 'simple' as const };
+    }
+
+    // Conversation nodes: full gist tooltip with title + bullets
+    return {
+      title: node.label, // Use label as title (summary is now subtext in node)
+      bullets: node.gistBullets,
+      variant: 'gist' as const,
+    };
   }, [hoveredNodeId, graphNodes]);
 
   // Build child map for determining which nodes have children
@@ -349,6 +362,7 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
       position: { x: 0, y: 0 },
       data: {
         label: node.label,
+        subtext: node.subtext, // Pass subtext for conversation/root nodes
         isRoot: rootIdList.includes(node.id), // Any root node is marked as root
         hasChildren: (childMap.get(node.id)?.length || 0) > 0,
         childCount: childMap.get(node.id)?.length || 0,
@@ -1101,8 +1115,8 @@ function KnowledgeGraphInner({ nodes: rawGraphNodes, rootNodeId, onNodeClick, on
       </ReactFlow>
 
       {/* Summary Tooltip - disabled on touch devices */}
-      {hoveredSummary && !isTouchDevice && (
-        <Tooltip content={hoveredSummary} position={tooltipPosition} />
+      {hoveredTooltipData && !isTouchDevice && (
+        <Tooltip title={hoveredTooltipData.title} bullets={hoveredTooltipData.bullets} variant={hoveredTooltipData.variant} position={tooltipPosition} />
       )}
 
       {/* Center Modal for conversation (when viewMode is 'modal') */}
